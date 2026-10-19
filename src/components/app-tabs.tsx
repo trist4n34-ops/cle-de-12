@@ -9,23 +9,27 @@ export default function AppTabs() {
 
   return (
     <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
+      backgroundColor={colors.backgroundElement}
+      indicatorColor={colors.backgroundSelected}
       labelStyle={{ selected: { color: colors.text } }}>
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
-        />
+      <NativeTabs.Trigger name="(diag)">
+        <NativeTabs.Trigger.Label>Diagnostic</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'stethoscope', selected: 'stethoscope' }} md="troubleshoot" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
-        />
+      <NativeTabs.Trigger name="guides">
+        <NativeTabs.Trigger.Label>Guides</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'wrench.and.screwdriver', selected: 'wrench.and.screwdriver.fill' }} md="build" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="garage">
+        <NativeTabs.Trigger.Label>Mon garage</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'car', selected: 'car.fill' }} md="directions_car" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="premium">
+        <NativeTabs.Trigger.Label>Premium</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'star', selected: 'star.fill' }} md="star" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );
