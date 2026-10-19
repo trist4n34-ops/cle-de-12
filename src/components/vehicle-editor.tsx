@@ -105,7 +105,7 @@ export function VehicleCard() {
         </ThemedText>
       ) : null}
       <ThemedText type="small" themeColor="textSecondary">
-        {`${CAR_MAKES.length} marques et ${MODEL_COUNT} modèles au catalogue, gratuits. Tapez pour filtrer ou saisissez librement.`}
+        {`${CAR_MAKES.length} marques et ${MODEL_COUNT.toLocaleString('fr-FR')} modèles au catalogue, gratuits. Tapez pour filtrer ou saisissez librement. Données : registres ouverts de l’UE, des Pays-Bas et du Royaume-Uni.`}
       </ThemedText>
       <Row>
         <Field label="Marque" placeholder="Peugeot" value={editing.make} onChangeText={(make) => set({ make })} />
@@ -142,6 +142,7 @@ export function VehicleCard() {
 }
 
 const MAX_SUGGESTIONS = 12;
+const MAX_MODELS = 40;
 
 /** Suggestions du catalogue : marque, puis modèle (filtré par année), puis motorisation. */
 function CatalogSuggestions({ vehicle, onPick }: { vehicle: Vehicle; onPick: (patch: Partial<Vehicle>) => void }) {
@@ -163,10 +164,12 @@ function CatalogSuggestions({ vehicle, onPick }: { vehicle: Vehicle; onPick: (pa
 
   const model = findModel(make.name, vehicle.model);
   if (!model) {
-    const models = searchModels(make.name, vehicle.model, year);
-    if (!models.length) return null;
+    const all = searchModels(make.name, vehicle.model, year);
+    if (!all.length) return null;
+    const models = all.slice(0, MAX_MODELS);
     return (
-      <Suggestions label={`Modèles ${make.name}${year ? ` (${year})` : ''}`}>
+      <Suggestions
+        label={`Modèles ${make.name}${year ? ` (${year})` : ''}${all.length > MAX_MODELS ? ` : ${MAX_MODELS} sur ${all.length}, tapez pour filtrer` : ''}`}>
         {models.map((md) => (
           <Chip key={md.name} label={md.name} selected={false} onPress={() => onPick({ make: make.name, model: md.name, engine: '' })} />
         ))}

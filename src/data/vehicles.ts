@@ -1,9 +1,15 @@
 /**
- * Catalogue des marques et modèles vendus en France (VP, 1995 à aujourd'hui),
- * accessible gratuitement. Les motorisations sont détaillées pour les modèles
- * les plus réparés par les amateurs ; pour les autres, la saisie reste libre.
+ * Catalogue des marques et modèles, accessible gratuitement. Deux couches :
+ * - une sélection éditée à la main pour le parc français, avec les générations
+ *   et les motorisations des modèles les plus réparés ;
+ * - les registres ouverts européens (immatriculations neuves de l'UE, registre
+ *   néerlandais RDW, parc britannique), regroupés par scripts/build-vehicle-catalog.py
+ *   dans vehicles-open-data.json, qui complètent les marques et modèles manquants.
+ * La saisie libre reste possible.
  */
 import type { Fuel } from '@/lib/diagnosis';
+
+import openData from './vehicles-open-data.json';
 
 export type EngineOption = { label: string; fuel: Fuel };
 export type CarModel = { name: string; from: number; to?: number; engines?: EngineOption[] };
@@ -35,7 +41,7 @@ const VAG = [
 ];
 const TOYOTA_HYBRID = [e('1.0 VVT-i 69/72 ch', 'Essence'), e('1.33 Dual VVT-i 99 ch', 'Essence'), e('1.5 Hybrid 100/116 ch', 'Hybride'), e('1.8 Hybrid 122/140 ch', 'Hybride'), e('2.0 Hybrid 184/196 ch', 'Hybride'), e('1.4 D-4D 90 ch', 'Diesel')];
 
-export const CAR_MAKES: CarMake[] = [
+const CURATED: CarMake[] = [
   { name: 'Peugeot', models: [
     m('106', 1991, 2003, [e('1.0 50 ch', 'Essence'), e('1.1 60 ch', 'Essence'), e('1.4 75 ch', 'Essence'), e('1.5 D 57 ch', 'Diesel')]),
     m('107', 2005, 2014, [e('1.0 68 ch', 'Essence'), e('1.4 HDi 54 ch', 'Diesel')]),
@@ -135,6 +141,38 @@ export const CAR_MAKES: CarMake[] = [
 ];
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+const MAKE_ALIASES: Record<string, string> = { ssangyong: 'SsangYong / KGM', kgm: 'SsangYong / KGM' };
+const compact = (s: string) => fold(s).replace(/[^a-z0-9+]/g, '');
+
+/** Année au-delà de laquelle un modèle encore immatriculé est considéré comme toujours vendu. */
+const ONGOING_FROM = 2024;
+
+function mergeOpenData(curated: CarMake[], open: [string, [string, number, number][]][]): CarMake[] {
+  const byName = new Map(curated.map((mk) => [fold(mk.name), { ...mk, models: [...mk.models] }]));
+  for (const [rawMake, models] of open) {
+    const name = MAKE_ALIASES[fold(rawMake)] ?? rawMake;
+    const make = byName.get(fold(name)) ?? { name, models: [] };
+    byName.set(fold(name), make);
+    const known = make.models.map((md) => compact(md.name));
+    for (const [model, from, to] of models) {
+      const key = compact(model);
+      // « Clio » est déjà couvert par « Clio II », « Clio III »… de la sélection éditée.
+      if (known.some((k) => k === key || k.startsWith(key))) continue;
+      make.models.push({ name: model, from, to: to >= ONGOING_FROM ? undefined : to });
+      known.push(key);
+    }
+  }
+  const order = (a: string, b: string) => a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' });
+  return [...byName.values()]
+    .map((mk) => ({ ...mk, models: mk.models.sort((a, b) => order(a.name, b.name)) }))
+    .sort((a, b) => order(a.name, b.name));
+}
+
+export const CAR_MAKES: CarMake[] = mergeOpenData(CURATED, openData.makes as [string, [string, number, number][]][]);
+
+/** Sources des données ouvertes, à citer dans l'app (licences CC BY 4.0 et OGL). */
+export const CATALOG_SOURCES: string[] = openData.sources;
 
 /** Marques dont le nom contient la recherche (sans tenir compte des accents). */
 export function searchMakes(query: string): CarMake[] {

@@ -4,8 +4,11 @@ import { CAR_MAKES, findModel, MODEL_COUNT, searchMakes, searchModels } from '@/
 
 describe('catalogue véhicules', () => {
   it('couvre les marques du marché français', () => {
-    expect(CAR_MAKES.length).toBeGreaterThanOrEqual(40);
-    expect(MODEL_COUNT).toBeGreaterThan(400);
+    expect(CAR_MAKES.length).toBeGreaterThanOrEqual(90);
+    expect(MODEL_COUNT).toBeGreaterThan(1500);
+    for (const name of ['Peugeot', 'Renault', 'Citroën', 'Dacia', 'BYD', 'MG', 'Lynk&co', 'Alpine', 'Tesla']) {
+      expect(CAR_MAKES.some((mk) => mk.name === name)).toBe(true);
+    }
   });
 
   it('n’a pas de doublons de marque, de modèle ni de motorisation', () => {
@@ -27,7 +30,18 @@ describe('catalogue véhicules', () => {
 
   it('cherche sans tenir compte des accents ni de la casse', () => {
     expect(searchMakes('citroen').map((mk) => mk.name)).toEqual(['Citroën']);
+    expect(searchMakes('ssangyong').map((mk) => mk.name)).toEqual(['SsangYong / KGM']);
     expect(searchModels('renault', 'megane').length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('garde les générations éditées plutôt que le nom générique des registres', () => {
+    const clios = searchModels('Renault', 'clio').map((md) => md.name);
+    expect(clios).toContain('Clio III');
+    expect(clios).not.toContain('Clio');
+  });
+
+  it('écarte les immatriculations tardives d’occasions importées', () => {
+    expect(findModel('Peugeot', '205')?.to).toBeLessThanOrEqual(2000);
   });
 
   it('filtre les modèles par année', () => {
