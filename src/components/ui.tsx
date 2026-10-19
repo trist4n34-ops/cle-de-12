@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
 import type { Urgency } from '@/lib/diagnosis';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -141,18 +142,19 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
   );
 }
 
-const VERDICT: Record<Urgency, { label: string; fg: 'ok' | 'warn' | 'stop'; bg: 'okBg' | 'warnBg' | 'stopBg' }> = {
-  ok: { label: 'Vous pouvez rouler', fg: 'ok', bg: 'okBg' },
-  prudence: { label: 'Roulez avec prudence', fg: 'warn', bg: 'warnBg' },
-  stop: { label: 'Ne roulez pas', fg: 'stop', bg: 'stopBg' },
-};
+const VERDICT = {
+  ok: { label: 'verdict.ok', fg: 'ok', bg: 'okBg' },
+  prudence: { label: 'verdict.prudence', fg: 'warn', bg: 'warnBg' },
+  stop: { label: 'verdict.stop', fg: 'stop', bg: 'stopBg' },
+} as const satisfies Record<Urgency, { label: string; fg: 'ok' | 'warn' | 'stop'; bg: 'okBg' | 'warnBg' | 'stopBg' }>;
 
 export function Verdict({ urgency, reason, title }: { urgency: Urgency; reason?: string; title?: string }) {
   const theme = useTheme();
+  const { t } = useT();
   const v = VERDICT[urgency];
   return (
     <View style={[styles.verdict, { backgroundColor: theme[v.bg], borderLeftColor: theme[v.fg] }]}>
-      <ThemedText style={[styles.verdictTitle, { color: theme[v.fg] }]}>{title ?? v.label}</ThemedText>
+      <ThemedText style={[styles.verdictTitle, { color: theme[v.fg] }]}>{title ?? t(v.label)}</ThemedText>
       {reason ? <ThemedText>{reason}</ThemedText> : null}
     </View>
   );
@@ -160,9 +162,10 @@ export function Verdict({ urgency, reason, title }: { urgency: Urgency; reason?:
 
 export function Dots({ value }: { value: number }) {
   const theme = useTheme();
+  const { t } = useT();
   const n = Math.max(1, Math.min(5, Math.round(value)));
   return (
-    <ThemedText accessibilityLabel={`Difficulté ${n} sur 5`} style={{ color: theme.accent, letterSpacing: 2 }}>
+    <ThemedText accessibilityLabel={t('ui.difficulty', { n })} style={{ color: theme.accent, letterSpacing: 2 }}>
       {'●'.repeat(n)}
       {'○'.repeat(5 - n)}
     </ThemedText>
@@ -171,6 +174,7 @@ export function Dots({ value }: { value: number }) {
 
 export function LockBox({ text, onUnlock }: { text: string; onUnlock: () => void }) {
   const theme = useTheme();
+  const { t } = useT();
   return (
     <View style={[styles.lock, { borderColor: theme.line, backgroundColor: theme.backgroundSelected }]}>
       <View style={{ flex: 1, gap: Spacing.one, minWidth: 180 }}>
@@ -179,7 +183,7 @@ export function LockBox({ text, onUnlock }: { text: string; onUnlock: () => void
           {text}
         </ThemedText>
       </View>
-      <Button label="Débloquer" kind="signal" onPress={onUnlock} />
+      <Button label={t('ui.unlock')} kind="signal" onPress={onUnlock} />
     </View>
   );
 }

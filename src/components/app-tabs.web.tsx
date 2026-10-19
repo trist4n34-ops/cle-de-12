@@ -9,23 +9,25 @@ import {
 import { Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
 export default function AppTabs() {
+  const { t } = useT();
   return (
     <Tabs>
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="(diag)" href="/" asChild>
-            <TabButton>Diagnostic</TabButton>
+            <TabButton>{t('tabs.diagnostic')}</TabButton>
           </TabTrigger>
           <TabTrigger name="guides" href="/guides" asChild>
-            <TabButton>Guides</TabButton>
+            <TabButton>{t('tabs.guides')}</TabButton>
           </TabTrigger>
           <TabTrigger name="garage" href="/garage" asChild>
-            <TabButton>Mon garage</TabButton>
+            <TabButton>{t('tabs.garage')}</TabButton>
           </TabTrigger>
           <TabTrigger name="premium" href="/premium" asChild>
             <TabButton>Premium</TabButton>

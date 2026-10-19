@@ -1,10 +1,12 @@
 import { reviewQuote } from '@/server/claude';
-import { handle } from '@/server/http';
-import { QuoteInput, readJson } from '@/server/requests';
+import { aiRoute, preflight } from '@/server/http';
+import { QuoteInput } from '@/server/requests';
 
-/** Analyse de devis : 1 par mois en gratuit (compté par l'app), illimitée en Premium. */
-export async function POST(request: Request) {
-  const input = await readJson(request, QuoteInput);
-  if (input instanceof Response) return input;
-  return handle(() => reviewQuote(input));
+/** Analyse de devis : quota gratuit mensuel vérifié par le serveur, illimitée en Premium. */
+export function POST(request: Request) {
+  return aiRoute(request, QuoteInput, 'quote', reviewQuote);
+}
+
+export function OPTIONS(request: Request) {
+  return preflight(request);
 }

@@ -6,34 +6,36 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Eyebrow, Row, Screen, Tag, Title } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { type TKey, useT } from '@/i18n';
 import { usePremium } from '@/lib/purchases';
 import { FREE_CT_REPORTS_PER_MONTH, FREE_DIAGNOSES_PER_MONTH, FREE_QUOTES_PER_MONTH, useStore } from '@/lib/store';
 
-type Feature = [label: string, free: boolean | string, premium: boolean | string];
+/** Valeur d'une colonne : inclus ou non, ou un texte (clé traduite, ou nombre par mois). */
+type Value = boolean | TKey | { perMonth: number };
+type Feature = [label: TKey, free: Value, premium: Value];
 
 const FEATURES: Feature[] = [
-  ['Lecture des codes par dongle OBD2 Bluetooth', true, true],
-  ['Verdict de sécurité : rouler, prudence ou arrêt', true, true],
-  ['Causes probables avec coûts pièces et garage', true, true],
-  ['Catalogue de toutes les marques et modèles', true, true],
-  ['Pannes connues de votre moteur', true, true],
-  ['Identifier un bruit, plan d’entretien, check-list du contrôle technique', true, true],
-  ['Diagnostics IA par mois', String(FREE_DIAGNOSES_PER_MONTH), 'Illimités'],
-  ['Analyse de devis de garage', `${FREE_QUOTES_PER_MONTH} par mois`, 'Illimitée'],
-  ['Analyse du procès-verbal de contrôle technique', `${FREE_CT_REPORTS_PER_MONTH} par mois`, 'Illimitée'],
-  ['Données moteur en direct (régime, température, batterie)', false, true],
-  ['Guides pas à pas essentiels', true, true],
-  ['Analyse de photo (voyant, fuite, pièce usée)', false, true],
-  ['Plan de réparation sur mesure pour votre modèle', false, true],
-  ['Questions de suivi pendant la réparation', false, true],
-  ['Guides avancés avec couples de serrage', false, true],
-  ['Plusieurs véhicules, carnet d’entretien et export PDF', false, true],
+  ['premium.feature.obd', true, true],
+  ['premium.feature.verdict', true, true],
+  ['premium.feature.causes', true, true],
+  ['premium.feature.catalog', true, true],
+  ['premium.feature.knownIssues', true, true],
+  ['premium.feature.tools', true, true],
+  ['premium.feature.aiDiagnoses', { perMonth: FREE_DIAGNOSES_PER_MONTH }, 'premium.value.unlimitedDiagnoses'],
+  ['premium.feature.quotes', { perMonth: FREE_QUOTES_PER_MONTH }, 'premium.value.unlimitedAnalyses'],
+  ['premium.feature.ctReports', { perMonth: FREE_CT_REPORTS_PER_MONTH }, 'premium.value.unlimitedAnalyses'],
+  ['premium.feature.live', false, true],
+  ['premium.feature.guides', true, true],
+  ['premium.feature.photo', false, true],
+  ['premium.feature.plan', false, true],
+  ['premium.feature.chat', false, true],
+  ['premium.feature.advancedGuides', false, true],
+  ['premium.feature.multiVehicle', false, true],
 ];
-
-const DEMO_PRICES = { monthly: '6,99 €/mois', annual: '49 €/an, soit 4,08 €/mois' };
 
 export default function PremiumScreen() {
   const theme = useTheme();
+  const { t, tn } = useT();
   const { isPremium, demo, packages, purchase, restore, setDemo, buyCredit, creditPrice } = usePremium();
   const { state } = useStore();
   const [busy, setBusy] = useState(false);
@@ -43,9 +45,9 @@ export default function PremiumScreen() {
     setBusy(true);
     setMessage('');
     try {
-      if (await purchase(pkg)) setMessage('Premium activé. Merci !');
+      if (await purchase(pkg)) setMessage(t('premium.msg.activated'));
     } catch {
-      setMessage("Le paiement n'a pas abouti. Aucun montant n'a été débité.");
+      setMessage(t('common.paymentFailed'));
     } finally {
       setBusy(false);
     }
@@ -54,23 +56,31 @@ export default function PremiumScreen() {
   const doRestore = async () => {
     setBusy(true);
     try {
-      setMessage((await restore()) ? 'Abonnement restauré.' : 'Aucun abonnement trouvé sur ce compte.');
+      setMessage((await restore()) ? t('premium.msg.restored') : t('premium.msg.noSubscription'));
     } catch {
-      setMessage('Restauration impossible pour le moment.');
+      setMessage(t('premium.msg.restoreFailed'));
     } finally {
       setBusy(false);
     }
   };
 
+  const valueText = (v: Value) =>
+    typeof v === 'string'
+      ? t(v)
+      : typeof v === 'object'
+        ? t('premium.value.perMonth', { count: v.perMonth })
+        : '';
+
   const column = (premium: boolean) =>
     FEATURES.map(([label, free, pro]) => {
       const v = premium ? pro : free;
+      const text = valueText(v);
       return (
         <Row key={label} style={{ flexWrap: 'nowrap', alignItems: 'flex-start' }}>
           <ThemedText style={{ width: 20, color: v ? theme.ok : theme.textSecondary, fontWeight: 700 }}>{v ? '✓' : '–'}</ThemedText>
           <ThemedText type="small" themeColor={v ? 'text' : 'textSecondary'} style={{ flex: 1 }}>
-            {label}
-            {typeof v === 'string' ? ` : ${v}` : ''}
+            {t(label)}
+            {text ? `${t('premium.value.separator')}${text}` : ''}
           </ThemedText>
         </Row>
       );
@@ -78,33 +88,34 @@ export default function PremiumScreen() {
 
   return (
     <Screen>
-      <Title lede="La version gratuite suffit pour un diagnostic ponctuel. Premium s'adresse à ceux qui entretiennent eux-mêmes leurs voitures toute l'année. Aucun boîtier propriétaire : n'importe quel dongle ELM327 Bluetooth à 15–30 € fonctionne.">
-        Gratuit ou Premium
-      </Title>
+      <Title lede={t('premium.lede')}>{t('premium.title')}</Title>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.three }}>
         <Card style={{ flexGrow: 1, flexBasis: 260 }}>
-          <Eyebrow>Gratuit</Eyebrow>
-          <ThemedText style={{ fontSize: 36, fontWeight: 800 }}>0 €</ThemedText>
+          <Eyebrow>{t('premium.free')}</Eyebrow>
+          <ThemedText style={{ fontSize: 36, fontWeight: 800 }}>{t('premium.price.free')}</ThemedText>
           {column(false)}
         </Card>
         <Card style={{ flexGrow: 1, flexBasis: 260, borderColor: theme.signal, borderWidth: 2 }}>
           <Row style={{ justifyContent: 'space-between' }}>
             <Eyebrow>Premium</Eyebrow>
-            <Tag label="7 jours offerts" premium />
+            <Tag label={t('premium.trial')} premium />
           </Row>
           {demo ? (
             <>
-              <ThemedText style={{ fontSize: 36, fontWeight: 800 }}>49 €<ThemedText themeColor="textSecondary"> /an</ThemedText></ThemedText>
+              <ThemedText style={{ fontSize: 36, fontWeight: 800 }}>
+                {t('premium.price.annual')}
+                <ThemedText themeColor="textSecondary">{t('premium.price.perYear')}</ThemedText>
+              </ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                ou {DEMO_PRICES.monthly}
+                {t('premium.price.orMonthly')}
               </ThemedText>
             </>
           ) : null}
           {column(true)}
           {isPremium ? (
-            <Tag label="Premium actif" premium />
+            <Tag label={t('premium.active')} premium />
           ) : demo ? (
-            <Button kind="signal" label="Essayer Premium (démo)" onPress={() => setDemo(true)} />
+            <Button kind="signal" label={t('premium.tryDemo')} onPress={() => setDemo(true)} />
           ) : (
             packages.map((pkg) => (
               <Button
@@ -116,8 +127,8 @@ export default function PremiumScreen() {
               />
             ))
           )}
-          {!demo ? <Button kind="ghost" label="Restaurer mes achats" onPress={doRestore} disabled={busy} /> : null}
-          {demo && isPremium ? <Button kind="ghost" label="Revenir au gratuit" onPress={() => setDemo(false)} /> : null}
+          {!demo ? <Button kind="ghost" label={t('premium.restore')} onPress={doRestore} disabled={busy} /> : null}
+          {demo && isPremium ? <Button kind="ghost" label={t('premium.backToFree')} onPress={() => setDemo(false)} /> : null}
           {message ? <ThemedText type="small">{message}</ThemedText> : null}
         </Card>
       </View>
@@ -125,23 +136,23 @@ export default function PremiumScreen() {
         <Card>
           <Row style={{ justifyContent: 'space-between' }}>
             <View style={{ flex: 1, minWidth: 200, gap: Spacing.one }}>
-              <Eyebrow>Une seule panne</Eyebrow>
-              <ThemedText type="smallBold">{`Un diagnostic IA complet pour ${creditPrice}, sans abonnement`}</ThemedText>
+              <Eyebrow>{t('premium.oneOff.eyebrow')}</Eyebrow>
+              <ThemedText type="smallBold">{t('premium.oneOff.title', { price: creditPrice })}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
-                Pour ceux qui ne réparent pas eux-mêmes : verdict, causes, coûts et liens garage.
-                {state.credits ? ` Vous avez ${state.credits} diagnostic${state.credits > 1 ? 's' : ''} d’avance.` : ''}
+                {t('premium.oneOff.body')}
+                {state.credits ? ` ${tn('premium.oneOff.credits', state.credits)}` : ''}
               </ThemedText>
             </View>
             <Button
               kind="ghost"
-              label="Acheter un diagnostic"
+              label={t('premium.oneOff.buy')}
               disabled={busy}
               onPress={async () => {
                 setBusy(true);
                 try {
-                  setMessage((await buyCredit()) ? 'Diagnostic ajouté.' : 'Achat annulé.');
+                  setMessage((await buyCredit()) ? t('premium.oneOff.added') : t('common.purchaseCancelled'));
                 } catch {
-                  setMessage('Le paiement n’a pas abouti. Aucun montant n’a été débité.');
+                  setMessage(t('common.paymentFailed'));
                 } finally {
                   setBusy(false);
                 }
@@ -150,18 +161,11 @@ export default function PremiumScreen() {
           </Row>
         </Card>
       ) : null}
-      {demo ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          Mode démo : aucun paiement n’est configuré sur cette version, Premium se débloque gratuitement pour le tester.
-        </ThemedText>
-      ) : (
-        <ThemedText type="small" themeColor="textSecondary">
-          Abonnement renouvelé automatiquement, résiliable à tout moment depuis les réglages de votre store.
-        </ThemedText>
-      )}
       <ThemedText type="small" themeColor="textSecondary">
-        Les diagnostics sont indicatifs et ne remplacent pas l’avis d’un professionnel. Les photos et plaques
-        d’immatriculation servent uniquement à l’analyse demandée.
+        {demo ? t('premium.demoNote') : t('premium.renewNote')}
+      </ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {t('premium.disclaimer')}
       </ThemedText>
     </Screen>
   );

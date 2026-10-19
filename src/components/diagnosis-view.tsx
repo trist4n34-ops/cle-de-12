@@ -8,6 +8,7 @@ import { Button, Card, Dots, Field, Heading, LockBox, Row, Tag, Verdict } from '
 import { Spacing } from '@/constants/theme';
 import { findGuide } from '@/data/guides';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import { api, ApiError, stripId } from '@/lib/api';
 import { Cause, DiagnosisRecord } from '@/lib/diagnosis';
 import { garageLinks, partLinks } from '@/lib/partners';
@@ -20,14 +21,15 @@ const goPremium = () => router.push('/premium');
 export function DiagnosisView({ record }: { record: DiagnosisRecord }) {
   const r = record.result;
   const theme = useTheme();
+  const { t, date } = useT();
   return (
     <View style={{ gap: Spacing.three }}>
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <ThemedText type="small" themeColor="textSecondary">
-            {new Date(record.date).toLocaleDateString('fr-FR')} · {record.vehicleLabel}
+            {date(record.date)} · {record.vehicleLabel}
           </ThemedText>
-          <Tag label={record.source === 'ai' ? 'IA' : 'Base intégrée'} />
+          <Tag label={record.source === 'ai' ? t('dv.source.ai') : t('dv.source.offline')} />
         </Row>
         <Verdict urgency={r.urgency} reason={r.urgencyReason} />
         <ThemedText>{r.summary}</ThemedText>
@@ -46,30 +48,29 @@ export function DiagnosisView({ record }: { record: DiagnosisRecord }) {
       </Card>
 
       <Card>
-        <Heading>Causes probables</Heading>
+        <Heading>{t('dv.causes')}</Heading>
         {r.causes.length ? (
           r.causes.map((cause, i) => <CauseRow key={cause.title} cause={cause} index={i} record={record} />)
         ) : (
-          <ThemedText themeColor="textSecondary">Aucune cause identifiée.</ThemedText>
+          <ThemedText themeColor="textSecondary">{t('dv.noCause')}</ThemedText>
         )}
       </Card>
 
       <Card>
-        <Heading>Par quoi commencer</Heading>
+        <Heading>{t('dv.start')}</Heading>
         {r.checks.map((c, i) => (
           <ThemedText key={c}>
             {i + 1}. {c}
           </ThemedText>
         ))}
-        {r.safety.length ? <Verdict urgency="prudence" title="Sécurité" reason={r.safety.join('\n')} /> : null}
+        {r.safety.length ? <Verdict urgency="prudence" title={t('dv.safety')} reason={r.safety.join('\n')} /> : null}
       </Card>
 
       <Feedback record={record} />
       <Chat record={record} />
 
       <ThemedText type="small" themeColor="textSecondary">
-        Diagnostic indicatif, qui ne remplace pas l’avis d’un professionnel. Freins, direction et haute tension : faites
-        toujours contrôler par un garage.
+        {t('dv.disclaimer')}
       </ThemedText>
     </View>
   );
@@ -77,6 +78,7 @@ export function DiagnosisView({ record }: { record: DiagnosisRecord }) {
 
 function CauseRow({ cause, index, record }: { cause: Cause; index: number; record: DiagnosisRecord }) {
   const theme = useTheme();
+  const { t } = useT();
   const vehicle = useCurrentVehicle();
   const { isPremium } = usePremium();
   const guide = findGuide(cause.guideId);
@@ -92,7 +94,7 @@ function CauseRow({ cause, index, record }: { cause: Cause; index: number; recor
     try {
       setPlan(await api.repairPlan(stripId(vehicle), cause.title, `${record.symptoms} ${record.codes.join(' ')} ${record.result.summary}`));
     } catch (e) {
-      setPlanError(e instanceof ApiError ? e.message : 'Plan indisponible.');
+      setPlanError(e instanceof ApiError ? e.message : t('dv.planFailed'));
     } finally {
       setLoading(false);
     }
@@ -104,7 +106,7 @@ function CauseRow({ cause, index, record }: { cause: Cause; index: number; recor
         <ThemedText type="smallBold" style={{ flex: 1, fontSize: 17 }}>
           {cause.title}
         </ThemedText>
-        <ThemedText style={styles.prob}>{p} %</ThemedText>
+        <ThemedText style={styles.prob}>{t('common.percent', { value: p })}</ThemedText>
       </Row>
       <View style={[styles.bar, { backgroundColor: theme.backgroundSelected }]}>
         <View style={{ width: `${p}%`, height: '100%', backgroundColor: theme.accent }} />
@@ -113,21 +115,21 @@ function CauseRow({ cause, index, record }: { cause: Cause; index: number; recor
       <Row style={{ gap: Spacing.three }}>
         <Row style={{ gap: Spacing.one }}>
           <ThemedText type="small" themeColor="textSecondary">
-            Difficulté
+            {t('dv.difficulty')}
           </ThemedText>
           <Dots value={cause.difficulty} />
         </Row>
         <ThemedText type="small" themeColor="textSecondary">
-          Pièces <ThemedText type="smallBold">{cause.partsCost}</ThemedText>
+          {t('dv.parts')} <ThemedText type="smallBold">{cause.partsCost}</ThemedText>
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Garage <ThemedText type="smallBold">{cause.garageCost}</ThemedText>
+          {t('dv.garage')} <ThemedText type="smallBold">{cause.garageCost}</ThemedText>
         </ThemedText>
       </Row>
       {cause.partQuery ? (
         <Row>
           <ThemedText type="small" themeColor="textSecondary">
-            Prix des pièces :
+            {t('common.partPrices')}
           </ThemedText>
           {partLinks(cause.partQuery, vehicle ?? {}).map((l) => (
             <ExternalLink key={l.label} href={l.url}>
@@ -139,24 +141,21 @@ function CauseRow({ cause, index, record }: { cause: Cause; index: number; recor
       {cause.difficulty >= 4 ? (
         <Row>
           <ThemedText type="small" themeColor="textSecondary">
-            Réparation pour un garage :
+            {t('common.garageRepair')}
           </ThemedText>
           {garageLinks().map((l) => (
             <ExternalLink key={l.label} href={l.url}>
-              <ThemedText type="linkPrimary">Devis sur {l.label}</ThemedText>
+              <ThemedText type="linkPrimary">{t('common.quoteOn', { site: l.label })}</ThemedText>
             </ExternalLink>
           ))}
         </Row>
       ) : null}
       <Row>
-        {guide ? <Button kind="ghost" label={`Guide : ${guide.title}`} onPress={() => router.push(`/guides/${guide.id}`)} /> : null}
-        {!plan && isPremium ? <Button kind="ghost" label="Plan de réparation sur mesure" loading={loading} onPress={loadPlan} /> : null}
+        {guide ? <Button kind="ghost" label={t('common.guide', { title: guide.title })} onPress={() => router.push(`/guides/${guide.id}`)} /> : null}
+        {!plan && isPremium ? <Button kind="ghost" label={t('dv.planButton')} loading={loading} onPress={loadPlan} /> : null}
       </Row>
       {!isPremium && index === 0 ? (
-        <LockBox
-          text="Le plan sur mesure liste outils, pièces, étapes et couples pour votre modèle exact."
-          onUnlock={goPremium}
-        />
+        <LockBox text={t('dv.planLocked')} onUnlock={goPremium} />
       ) : null}
       {planError ? <ThemedText themeColor="textSecondary">{planError}</ThemedText> : null}
       {plan ? <PlanView plan={plan} /> : null}
@@ -164,24 +163,25 @@ function CauseRow({ cause, index, record }: { cause: Cause; index: number; recor
   );
 }
 
-function PlanView({ plan }: { plan: RepairPlan }) {
+export function PlanView({ plan }: { plan: RepairPlan }) {
   const theme = useTheme();
+  const { t } = useT();
   return (
     <View style={[styles.plan, { borderColor: theme.line }]}>
       <Row>
-        <Tag label="Plan sur mesure" />
+        <Tag label={t('dv.plan.tag')} />
         <Dots value={plan.level} />
         <ThemedText type="small">{plan.duration}</ThemedText>
       </Row>
-      <ThemedText type="smallBold">Outillage</ThemedText>
+      <ThemedText type="smallBold">{t('dv.plan.tools')}</ThemedText>
       <ThemedText type="small">{plan.tools.join(' · ')}</ThemedText>
       {plan.parts.length ? (
         <>
-          <ThemedText type="smallBold">Pièces</ThemedText>
+          <ThemedText type="smallBold">{t('dv.parts')}</ThemedText>
           <ThemedText type="small">{plan.parts.join(' · ')}</ThemedText>
         </>
       ) : null}
-      {plan.warnings.length ? <Verdict urgency="prudence" title="Attention" reason={plan.warnings.join('\n')} /> : null}
+      {plan.warnings.length ? <Verdict urgency="prudence" title={t('dv.plan.warning')} reason={plan.warnings.join('\n')} /> : null}
       {plan.steps.map((s, i) => (
         <View key={`${i}-${s.title}`} style={{ gap: 2 }}>
           <ThemedText type="smallBold" style={s.danger ? { color: theme.stop } : undefined}>
@@ -196,7 +196,7 @@ function PlanView({ plan }: { plan: RepairPlan }) {
         </View>
       ))}
       <ThemedText type="small" themeColor="textSecondary">
-        Couples indiqués : valeurs types. Vérifiez la valeur constructeur de votre véhicule.
+        {t('dv.plan.torqueNote')}
       </ThemedText>
     </View>
   );
@@ -205,6 +205,7 @@ function PlanView({ plan }: { plan: RepairPlan }) {
 /** « Ça a réglé le problème ? » : alimente, à terme, les probabilités par modèle. */
 function Feedback({ record }: { record: DiagnosisRecord }) {
   const { update } = useStore();
+  const { t } = useT();
   const give = (fixed: boolean, causeIndex?: number) =>
     update((s) => ({
       ...s,
@@ -218,19 +219,23 @@ function Feedback({ record }: { record: DiagnosisRecord }) {
     return (
       <Card>
         <ThemedText type="small" themeColor="textSecondary">
-          {record.feedback.fixed ? `Réparé${cause ? ` : ${cause.title}` : ''}. Merci, ce retour améliore les diagnostics.` : 'Pas encore réglé. Relancez un diagnostic avec les nouveaux symptômes.'}
+          {record.feedback.fixed
+            ? cause
+              ? t('dv.feedback.fixedCause', { cause: cause.title })
+              : t('dv.feedback.fixed')
+            : t('dv.feedback.notFixed')}
         </ThemedText>
       </Card>
     );
   }
   return (
     <Card>
-      <Heading>Ça a réglé le problème ?</Heading>
+      <Heading>{t('dv.feedback.question')}</Heading>
       <Row>
         {record.result.causes.slice(0, 3).map((c, i) => (
-          <Button key={c.title} kind="ghost" label={`Oui : ${c.title}`} onPress={() => give(true, i)} />
+          <Button key={c.title} kind="ghost" label={t('dv.feedback.yes', { cause: c.title })} onPress={() => give(true, i)} />
         ))}
-        <Button kind="ghost" label="Pas encore" onPress={() => give(false)} />
+        <Button kind="ghost" label={t('dv.feedback.notYet')} onPress={() => give(false)} />
       </Row>
     </Card>
   );
@@ -242,6 +247,7 @@ function Chat({ record }: { record: DiagnosisRecord }) {
   const { isPremium } = usePremium();
   const vehicle = useCurrentVehicle();
   const theme = useTheme();
+  const { t } = useT();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -263,7 +269,7 @@ function Chat({ record }: { record: DiagnosisRecord }) {
     } catch (e) {
       setTurns(turns);
       setDraft(q);
-      setError(e instanceof ApiError ? e.message : 'Message non envoyé.');
+      setError(e instanceof ApiError ? e.message : t('dv.chat.failed'));
     } finally {
       setSending(false);
     }
@@ -271,17 +277,14 @@ function Chat({ record }: { record: DiagnosisRecord }) {
 
   return (
     <Card>
-      <Heading>Poser une question</Heading>
+      <Heading>{t('dv.chat.title')}</Heading>
       {record.result.questions.length ? (
         <ThemedText type="small" themeColor="textSecondary">
-          Pour affiner : {record.result.questions.join(' ')}
+          {t('dv.chat.refine', { questions: record.result.questions.join(' ') })}
         </ThemedText>
       ) : null}
       {!isPremium ? (
-        <LockBox
-          text="Discutez avec Clé de 12 pendant la réparation : « j'ai permuté les bobines, le code est passé en P0302, je fais quoi ? »"
-          onUnlock={goPremium}
-        />
+        <LockBox text={t('dv.chat.locked')} onUnlock={goPremium} />
       ) : (
         <>
           {turns.map((t, i) => (
@@ -297,8 +300,8 @@ function Chat({ record }: { record: DiagnosisRecord }) {
             </View>
           ))}
           {error ? <ThemedText themeColor="textSecondary">{error}</ThemedText> : null}
-          <Field label="Votre question" placeholder="J'ai permuté les bobines, le code a changé…" value={draft} onChangeText={setDraft} />
-          <Button label="Envoyer" loading={sending} disabled={!draft.trim()} onPress={send} />
+          <Field label={t('dv.chat.label')} placeholder={t('dv.chat.placeholder')} value={draft} onChangeText={setDraft} />
+          <Button label={t('dv.chat.send')} loading={sending} disabled={!draft.trim()} onPress={send} />
         </>
       )}
     </Card>

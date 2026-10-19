@@ -4,10 +4,11 @@ import { Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { KnownIssues } from '@/components/known-issues';
-import { Button, Card, Field, Heading, LockBox, Row, Screen, Tag, Title, Verdict } from '@/components/ui';
+import { Button, Card, Chip, Field, Heading, LockBox, Row, Screen, Tag, Title, Verdict } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { Due, maintenanceDue } from '@/data/maintenance';
 import { useTheme } from '@/hooks/use-theme';
+import { LANGUAGES, useT } from '@/i18n';
 import { vehicleLabel } from '@/lib/diagnosis';
 import { exportLog } from '@/lib/export-log';
 import { usePremium } from '@/lib/purchases';
@@ -15,6 +16,7 @@ import { newId, useCurrentVehicle, useStore } from '@/lib/store';
 
 export default function GarageScreen() {
   const theme = useTheme();
+  const { t, num, date: fmtDate } = useT();
   const { state, update } = useStore();
   const { isPremium } = usePremium();
   const current = useCurrentVehicle();
@@ -44,10 +46,10 @@ export default function GarageScreen() {
 
   return (
     <Screen>
-      <Title lede="Vos véhicules, le carnet d'entretien et l'historique des diagnostics.">Mon garage</Title>
+      <Title lede={t('garage.lede')}>{t('garage.title')}</Title>
 
       <Card>
-        <Heading>Véhicules</Heading>
+        <Heading>{t('garage.vehicles')}</Heading>
         {state.vehicles.length ? (
           state.vehicles.map((v) => (
             <Row key={v.id} style={{ justifyContent: 'space-between' }}>
@@ -56,11 +58,11 @@ export default function GarageScreen() {
                 {v.plate ? ` · ${v.plate}` : ''}
               </ThemedText>
               {v.id !== current?.id ? (
-                <Button kind="ghost" label="Choisir" onPress={() => update((s) => ({ ...s, vehicleId: v.id }))} />
+                <Button kind="ghost" label={t('garage.select')} onPress={() => update((s) => ({ ...s, vehicleId: v.id }))} />
               ) : null}
               <Button
                 kind="ghost"
-                label="Retirer"
+                label={t('garage.remove')}
                 onPress={() =>
                   update((s) => ({
                     ...s,
@@ -73,14 +75,10 @@ export default function GarageScreen() {
             </Row>
           ))
         ) : (
-          <ThemedText themeColor="textSecondary">Ajoutez votre véhicule depuis l’onglet Diagnostic.</ThemedText>
+          <ThemedText themeColor="textSecondary">{t('garage.noVehicle')}</ThemedText>
         )}
         {current && (current.fuel === 'Hybride' || current.fuel === 'Électrique') ? (
-          <Verdict
-            urgency="stop"
-            title="Haute tension"
-            reason="Ne touchez à aucun câble orange ni à la batterie de traction. Batterie 12 V, freins, pneus et liquides restent accessibles."
-          />
+          <Verdict urgency="stop" title={t('garage.hv.title')} reason={t('garage.hv.reason')} />
         ) : null}
       </Card>
 
@@ -88,9 +86,9 @@ export default function GarageScreen() {
 
       {current ? (
         <Card>
-          <Heading>Entretien à prévoir</Heading>
+          <Heading>{t('garage.maintenance.title')}</Heading>
           <ThemedText type="small" themeColor="textSecondary">
-            Calculé à partir du kilométrage et de votre carnet. Les intervalles sont des valeurs courantes : le carnet constructeur prime.
+            {t('garage.maintenance.note')}
           </ThemedText>
           {due.map((d) => (
             <DueRow
@@ -104,83 +102,119 @@ export default function GarageScreen() {
 
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
-          <Heading>Carnet d’entretien</Heading>
+          <Heading>{t('garage.log.title')}</Heading>
           {isPremium && current ? (
             <Button
               kind="ghost"
-              label="Exporter en PDF"
-              onPress={() => exportLog(current, state.log).catch(() => setExportMsg('Export impossible sur cet appareil.'))}
+              label={t('garage.log.export')}
+              onPress={() => exportLog(current, state.log).catch(() => setExportMsg(t('garage.log.exportFailed')))}
             />
           ) : null}
         </Row>
         {exportMsg ? <ThemedText type="small">{exportMsg}</ThemedText> : null}
         {!isPremium ? (
-          <LockBox
-            text="Suivez vos entretiens, gardez une trace pour la revente et recevez un rappel avant la prochaine vidange."
-            onUnlock={() => router.push('/premium')}
-          />
+          <LockBox text={t('garage.log.locked')} onUnlock={() => router.push('/premium')} />
         ) : !current ? null : (
           <>
             {log.map((l) => (
               <Row key={l.id} style={{ justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.line, paddingTop: Spacing.two }}>
                 <ThemedText type="code">{l.date}</ThemedText>
-                <ThemedText type="code">{l.mileage ? `${Number(l.mileage).toLocaleString('fr-FR')} km` : ''}</ThemedText>
+                <ThemedText type="code">{l.mileage ? `${num(Number(l.mileage))} km` : ''}</ThemedText>
                 <ThemedText style={{ flexBasis: '100%' }}>{l.operation}</ThemedText>
               </Row>
             ))}
             <Row style={{ alignItems: 'flex-end' }}>
-              <Field label="Date" value={date} onChangeText={setDate} placeholder="2026-10-19" />
-              <Field label="Kilométrage" keyboardType="number-pad" value={mileage} onChangeText={setMileage} placeholder="98000" />
-              <Field label="Opération" value={operation} onChangeText={setOperation} placeholder="Pneus avant" />
-              <Button label="Ajouter" disabled={!operation.trim()} onPress={addEntry} />
+              <Field label={t('garage.log.date')} value={date} onChangeText={setDate} placeholder="2026-10-19" />
+              <Field
+                label={t('garage.log.mileage')}
+                keyboardType="number-pad"
+                value={mileage}
+                onChangeText={setMileage}
+                placeholder="98000"
+              />
+              <Field
+                label={t('garage.log.operation')}
+                value={operation}
+                onChangeText={setOperation}
+                placeholder={t('garage.log.operationPlaceholder')}
+              />
+              <Button label={t('garage.log.add')} disabled={!operation.trim()} onPress={addEntry} />
             </Row>
           </>
         )}
       </Card>
 
       <Card>
-        <Heading>Historique des diagnostics</Heading>
+        <Heading>{t('garage.history.title')}</Heading>
         {state.history.length ? (
           state.history.map((h) => (
             <Pressable key={h.id} accessibilityRole="button" onPress={() => router.push(`/result/${h.id}`)}>
               <View style={{ gap: 2, paddingVertical: Spacing.two, borderTopWidth: 1, borderTopColor: theme.line }}>
                 <ThemedText type="small" themeColor="textSecondary">
-                  {new Date(h.date).toLocaleDateString('fr-FR')} · {h.vehicleLabel}
+                  {fmtDate(h.date)} · {h.vehicleLabel}
                 </ThemedText>
                 <ThemedText type="smallBold">{h.symptoms || h.codes.join(', ')}</ThemedText>
               </View>
             </Pressable>
           ))
         ) : (
-          <ThemedText themeColor="textSecondary">Vos diagnostics apparaîtront ici.</ThemedText>
+          <ThemedText themeColor="textSecondary">{t('garage.history.empty')}</ThemedText>
         )}
       </Card>
+
+      <LanguageCard />
     </Screen>
   );
 }
 
-const STATUS: Record<Due['status'], { label: string; color: 'stop' | 'warn' | 'ok' | 'textSecondary' }> = {
-  retard: { label: 'À faire', color: 'stop' },
-  bientot: { label: 'Bientôt', color: 'warn' },
-  ok: { label: 'À jour', color: 'ok' },
-  inconnu: { label: 'Non noté', color: 'textSecondary' },
-};
+/** Choix de la langue de l'interface ; sans choix, l'app suit l'appareil. */
+function LanguageCard() {
+  const { t, lang, override, setLanguage } = useT();
+  return (
+    <Card>
+      <Heading>{t('garage.language.title')}</Heading>
+      <Row>
+        {LANGUAGES.map((l) => (
+          <Chip key={l.code} label={l.name} selected={l.code === lang} onPress={() => setLanguage(l.code)} />
+        ))}
+      </Row>
+      <ThemedText type="small" themeColor="textSecondary">
+        {t('garage.language.hint')}
+      </ThemedText>
+      {override ? (
+        <Row>
+          <Button kind="ghost" label={t('garage.language.useDevice')} onPress={() => setLanguage(null)} />
+        </Row>
+      ) : null}
+    </Card>
+  );
+}
+
+const STATUS = {
+  retard: { label: 'garage.status.retard', color: 'stop' },
+  bientot: { label: 'garage.status.bientot', color: 'warn' },
+  ok: { label: 'garage.status.ok', color: 'ok' },
+  inconnu: { label: 'garage.status.inconnu', color: 'textSecondary' },
+} as const satisfies Record<Due['status'], { label: string; color: 'stop' | 'warn' | 'ok' | 'textSecondary' }>;
 
 function DueRow({ due, onDone }: { due: Due; onDone?: () => void }) {
   const theme = useTheme();
+  const { t, tn, num, date } = useT();
   const st = STATUS[due.status];
+  const months = due.item.everyMonths;
+  const or = t('garage.due.or');
   const interval = [
-    due.item.everyKm ? `tous les ${due.item.everyKm.toLocaleString('fr-FR')} km` : '',
-    due.item.everyMonths ? `${due.item.everyMonths % 12 === 0 ? `${due.item.everyMonths / 12} an${due.item.everyMonths > 12 ? 's' : ''}` : `${due.item.everyMonths} mois`}` : '',
+    due.item.everyKm ? t('garage.due.everyKm', { km: num(due.item.everyKm) }) : '',
+    months ? (months % 12 === 0 ? tn('garage.due.years', months / 12) : tn('garage.due.months', months)) : '',
   ]
     .filter(Boolean)
-    .join(' ou ');
+    .join(or);
   const next = [
-    due.nextKm ? `vers ${due.nextKm.toLocaleString('fr-FR')} km` : '',
-    due.nextDate ? `avant le ${new Date(due.nextDate).toLocaleDateString('fr-FR')}` : '',
+    due.nextKm ? t('garage.due.nextKm', { km: num(due.nextKm) }) : '',
+    due.nextDate ? t('garage.due.nextDate', { date: date(due.nextDate) }) : '',
   ]
     .filter(Boolean)
-    .join(' ou ');
+    .join(or);
   return (
     <View style={{ gap: 2, borderTopWidth: 1, borderTopColor: theme.line, paddingTop: Spacing.two }}>
       <Row style={{ justifyContent: 'space-between' }}>
@@ -188,11 +222,15 @@ function DueRow({ due, onDone }: { due: Due; onDone?: () => void }) {
           {due.item.title}
         </ThemedText>
         <ThemedText type="smallBold" style={{ color: theme[st.color] }}>
-          {st.label}
+          {t(st.label)}
         </ThemedText>
       </Row>
       <ThemedText type="small" themeColor="textSecondary">
-        {[interval, next ? `Prochaine fois ${next}` : '', due.last ? `Dernière fois le ${new Date(due.last.date).toLocaleDateString('fr-FR')}` : '']
+        {[
+          interval,
+          next ? t('garage.due.next', { next }) : '',
+          due.last ? t('garage.due.last', { date: date(due.last.date) }) : '',
+        ]
           .filter(Boolean)
           .join(' · ')}
       </ThemedText>
@@ -202,9 +240,11 @@ function DueRow({ due, onDone }: { due: Due; onDone?: () => void }) {
         </ThemedText>
       ) : null}
       <Row>
-        {due.item.guideId ? <Button kind="ghost" label="Voir le guide" onPress={() => router.push(`/guides/${due.item.guideId}`)} /> : null}
-        {onDone && due.status !== 'ok' ? <Button kind="ghost" label="Fait aujourd’hui" onPress={onDone} /> : null}
-        {!onDone && due.status === 'retard' ? <Tag label="Rappel dans le carnet : Premium" /> : null}
+        {due.item.guideId ? (
+          <Button kind="ghost" label={t('garage.due.guide')} onPress={() => router.push(`/guides/${due.item.guideId}`)} />
+        ) : null}
+        {onDone && due.status !== 'ok' ? <Button kind="ghost" label={t('garage.due.doneToday')} onPress={onDone} /> : null}
+        {!onDone && due.status === 'retard' ? <Tag label={t('garage.due.premiumReminder')} /> : null}
       </Row>
     </View>
   );

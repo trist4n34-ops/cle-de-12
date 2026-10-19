@@ -13,6 +13,7 @@ import { Spacing } from '@/constants/theme';
 import { extractCodes } from '@/data/obd-codes';
 import { SYMPTOMS } from '@/data/symptoms';
 import { useObdReader } from '@/features/obd/use-obd-reader';
+import { useT } from '@/i18n';
 import { api, ApiError, stripId } from '@/lib/api';
 import { DiagnosisRecord, DiagnosisRequest, vehicleLabel } from '@/lib/diagnosis';
 import { localDiagnosis } from '@/lib/local-diagnosis';
@@ -22,6 +23,7 @@ import { FREE_DIAGNOSES_PER_MONTH, newId, usage, useCurrentVehicle, useStore } f
 
 export default function DiagnosticScreen() {
   const { state, update } = useStore();
+  const { t, tn } = useT();
   const { isPremium, buyCredit, creditPrice } = usePremium();
   const [buying, setBuying] = useState(false);
   const vehicle = useCurrentVehicle();
@@ -51,7 +53,7 @@ export default function DiagnosticScreen() {
   const run = async () => {
     if (!vehicle || blocked) return;
     if (!symptoms.trim() && !tags.length && !codes.length) {
-      setNote('Décrivez un symptôme, cochez-en un ou lisez les codes défaut.');
+      setNote(t('diag.needInput'));
       return;
     }
     const v = obd.scan?.vin && !vehicle.vin ? { ...vehicle, vin: obd.scan.vin } : vehicle;
@@ -69,7 +71,7 @@ export default function DiagnosticScreen() {
       const ai = await api.diagnose(req);
       record = { id: newId(), date: new Date().toISOString(), vehicleLabel: vehicleLabel(v), symptoms: req.symptoms || req.symptomTags.join(', '), codes, result: ai, source: 'ai' };
     } catch (e) {
-      setNote(`${e instanceof ApiError ? e.message : "L'IA ne répond pas."} Diagnostic établi avec la base intégrée.`);
+      setNote(t('diag.offlineFallback', { reason: e instanceof ApiError ? e.message : t('diag.aiDown') }));
       record = {
         id: newId(),
         date: new Date().toISOString(),
@@ -94,9 +96,7 @@ export default function DiagnosticScreen() {
 
   return (
     <Screen>
-      <Title lede="Décrivez ce que fait la voiture ou lisez ses codes défaut. Clé de 12 vous dit si vous pouvez rouler, classe les causes probables et chiffre la réparation.">
-        Qu’est-ce qui cloche ?
-      </Title>
+      <Title lede={t('diag.lede')}>{t('diag.title')}</Title>
 
       <VehicleCard />
 
@@ -105,23 +105,23 @@ export default function DiagnosticScreen() {
       {vehicle ? (
         <Card>
           <Row style={{ justifyContent: 'space-between' }}>
-            <Eyebrow>Codes défaut</Eyebrow>
-            <Tag label="Dongle ELM327 Bluetooth" />
+            <Eyebrow>{t('diag.codes.eyebrow')}</Eyebrow>
+            <Tag label={t('diag.codes.dongle')} />
           </Row>
           {Platform.OS !== 'web' ? (
             <Row>
               <Button
-                label="Lire les codes"
+                label={t('diag.codes.read')}
                 loading={obd.status === 'searching' || obd.status === 'reading'}
                 onPress={obd.read}
               />
-              {obd.scan ? <Button kind="ghost" label="Effacer les codes" onPress={obd.clear} /> : null}
+              {obd.scan ? <Button kind="ghost" label={t('diag.codes.clear')} onPress={obd.clear} /> : null}
             </Row>
           ) : null}
           {obd.message ? <ThemedText type="small">{obd.message}</ThemedText> : null}
-          {obd.scan?.milOn ? <ThemedText type="small">Voyant moteur allumé.</ThemedText> : null}
+          {obd.scan?.milOn ? <ThemedText type="small">{t('diag.codes.mil')}</ThemedText> : null}
           <Field
-            label="Ou saisissez-les"
+            label={t('diag.codes.manual')}
             placeholder="P0301, P0171"
             autoCapitalize="characters"
             value={codesText}
@@ -136,11 +136,8 @@ export default function DiagnosticScreen() {
           <LiveData obd={obd} />
         ) : (
           <Card>
-            <Eyebrow>Données en direct</Eyebrow>
-            <LockBox
-              text="Régime, température, charge de la batterie, corrections de richesse : suivez le moteur en direct avec votre dongle et repérez les valeurs anormales."
-              onUnlock={() => router.push('/premium')}
-            />
+            <Eyebrow>{t('live.title')}</Eyebrow>
+            <LockBox text={t('diag.live.locked')} onUnlock={() => router.push('/premium')} />
           </Card>
         )
       ) : null}
@@ -149,42 +146,42 @@ export default function DiagnosticScreen() {
 
       {vehicle ? (
         <Card>
-          <Eyebrow>Symptômes fréquents</Eyebrow>
+          <Eyebrow>{t('diag.symptoms.eyebrow')}</Eyebrow>
           <Row>
             {SYMPTOMS.map((s) => (
               <Chip key={s.id} label={s.label} selected={tags.includes(s.id)} onPress={() => toggle(s.id)} />
             ))}
           </Row>
           <Field
-            label="Ce que vous constatez"
-            placeholder="Quand ça arrive (à froid, en charge, en freinant), les bruits, les odeurs, les voyants…"
+            label={t('diag.symptoms.label')}
+            placeholder={t('diag.symptoms.placeholder')}
             multiline
             value={symptoms}
             onChangeText={setSymptoms}
           />
           {isPremium ? (
             <Row>
-              <Button kind="ghost" label={photo ? 'Photo ajoutée ✓' : 'Ajouter une photo'} onPress={async () => setPhoto(await pickPhoto('library'))} />
-              {Platform.OS !== 'web' ? <Button kind="ghost" label="Prendre une photo" onPress={async () => setPhoto(await pickPhoto('camera'))} /> : null}
+              <Button kind="ghost" label={photo ? t('diag.photo.added') : t('diag.photo.add')} onPress={async () => setPhoto(await pickPhoto('library'))} />
+              {Platform.OS !== 'web' ? <Button kind="ghost" label={t('diag.photo.take')} onPress={async () => setPhoto(await pickPhoto('camera'))} /> : null}
             </Row>
           ) : null}
           {blocked ? (
             <>
               <LockBox
-                text={`Vos ${FREE_DIAGNOSES_PER_MONTH} diagnostics gratuits du mois sont utilisés. Le compteur repart le 1er du mois.`}
+                text={t('diag.quota.locked', { count: FREE_DIAGNOSES_PER_MONTH })}
                 onUnlock={() => router.push('/premium')}
               />
               <Row>
                 <Button
                   kind="ghost"
                   loading={buying}
-                  label={`Un seul diagnostic : ${creditPrice}`}
+                  label={t('diag.buyOne', { price: creditPrice })}
                   onPress={async () => {
                     setBuying(true);
                     try {
-                      if (!(await buyCredit())) setNote('Achat annulé.');
+                      if (!(await buyCredit())) setNote(t('common.purchaseCancelled'));
                     } catch {
-                      setNote('Le paiement n’a pas abouti. Aucun montant n’a été débité.');
+                      setNote(t('common.paymentFailed'));
                     } finally {
                       setBuying(false);
                     }
@@ -194,13 +191,13 @@ export default function DiagnosticScreen() {
             </>
           ) : (
             <Row>
-              <Button label="Lancer le diagnostic" loading={running} onPress={run} />
+              <Button label={t('diag.run')} loading={running} onPress={run} />
               <ThemedText type="small" themeColor="textSecondary">
                 {isPremium
-                  ? 'Diagnostics illimités'
+                  ? t('diag.unlimited')
                   : useCredit
-                    ? `${credits} diagnostic${credits > 1 ? 's' : ''} acheté${credits > 1 ? 's' : ''}`
-                    : `${left} diagnostic${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} ce mois-ci`}
+                    ? tn('diag.purchased', credits)
+                    : tn('diag.freeLeft', left)}
               </ThemedText>
             </Row>
           )}
@@ -211,24 +208,24 @@ export default function DiagnosticScreen() {
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <View style={{ flex: 1, minWidth: 200, gap: Spacing.one }}>
-            <ThemedText type="smallBold">Mon devis est-il normal ?</ThemedText>
+            <ThemedText type="smallBold">{t('quote.title')}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Photographiez le devis du garage, Clé de 12 compare chaque ligne aux prix du marché.
+              {t('diag.quoteCard.body')}
             </ThemedText>
           </View>
-          <Button kind="ghost" label="Vérifier un devis" onPress={() => router.push('/devis')} />
+          <Button kind="ghost" label={t('diag.quoteCard.button')} onPress={() => router.push('/devis')} />
         </Row>
       </Card>
 
       <Card>
         <Row style={{ justifyContent: 'space-between' }}>
           <View style={{ flex: 1, minWidth: 200, gap: Spacing.one }}>
-            <ThemedText type="smallBold">Contrôle technique</ThemedText>
+            <ThemedText type="smallBold">{t('ct.title')}</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Les vérifications à faire avant d’y aller, et l’explication de chaque défaut de votre procès-verbal.
+              {t('diag.ctCard.body')}
             </ThemedText>
           </View>
-          <Button kind="ghost" label="Préparer le contrôle" onPress={() => router.push('/controle-technique')} />
+          <Button kind="ghost" label={t('diag.ctCard.button')} onPress={() => router.push('/controle-technique')} />
         </Row>
       </Card>
 

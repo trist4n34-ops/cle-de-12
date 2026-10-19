@@ -1,10 +1,12 @@
 import { reviewCtReport } from '@/server/claude';
-import { handle } from '@/server/http';
-import { CtInput, readJson } from '@/server/requests';
+import { aiRoute, preflight } from '@/server/http';
+import { CtInput } from '@/server/requests';
 
-/** Analyse de procès-verbal de contrôle technique : 1 par mois en gratuit (compté par l'app), illimitée en Premium. */
-export async function POST(request: Request) {
-  const input = await readJson(request, CtInput);
-  if (input instanceof Response) return input;
-  return handle(() => reviewCtReport(input));
+/** Analyse de procès-verbal de contrôle technique : quota gratuit mensuel vérifié par le serveur, illimitée en Premium. */
+export function POST(request: Request) {
+  return aiRoute(request, CtInput, 'ct', reviewCtReport);
+}
+
+export function OPTIONS(request: Request) {
+  return preflight(request);
 }
