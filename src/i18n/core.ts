@@ -74,12 +74,21 @@ export function resolveLanguage(candidates: readonly (string | null | undefined)
   return DEFAULT_LANGUAGE;
 }
 
+/** Balise BCP 47 utilisable par Intl, ou null (certains systèmes renvoient « en-US@posix »). */
+export function validLocale(tag: string): string | null {
+  try {
+    return Intl.getCanonicalLocales(tag.split('@')[0].replace(/_/g, '-'))[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Locales préférées de l'appareil (balises BCP 47), de la plus à la moins préférée. */
 export function deviceLocales(): string[] {
   try {
     return getLocales()
-      .map((l) => l.languageTag || l.languageCode || '')
-      .filter(Boolean);
+      .map((l) => validLocale(l.languageTag || l.languageCode || ''))
+      .filter((tag): tag is string => !!tag);
   } catch {
     return [];
   }
@@ -91,7 +100,8 @@ export function detectLanguage(): Language {
 
 /** Locale de formatage : celle de l'appareil si elle est dans la langue active (fr-BE, en-US…), sinon celle par défaut. */
 export function localeFor(lang: Language, device: readonly string[] = deviceLocales()): string {
-  return device.find((tag) => normalizeLanguage(tag) === lang) ?? DEFAULT_LOCALE[lang];
+  const tag = device.find((t) => normalizeLanguage(t) === lang);
+  return (tag && validLocale(tag)) || DEFAULT_LOCALE[lang];
 }
 
 export function aiLanguageName(code?: string | null): string {

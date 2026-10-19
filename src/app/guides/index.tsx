@@ -35,17 +35,19 @@ export default function GuidesScreen() {
   return (
     <Screen>
       <Title lede={t('guides.lede')}>{t('guides.title')}</Title>
-      <Field
-        label={t('guides.search.label')}
-        placeholder={t('guides.search.placeholder')}
-        value={query}
-        onChangeText={setQuery}
-        autoCorrect={false}
-        autoCapitalize="none"
-        returnKeyType="search"
-        clearButtonMode="while-editing"
-      />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+      <Row>
+        <Field
+          label={t('guides.search.label')}
+          placeholder={t('guides.search.placeholder')}
+          value={query}
+          onChangeText={setQuery}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+        />
+      </Row>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.chips}>
         <Chip label={`${t('guides.all')} · ${num(matches.length)}`} selected={category === null} onPress={() => setCategory(null)} />
         {GUIDE_CATEGORIES.map((c) => (
           <Chip

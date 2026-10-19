@@ -14,6 +14,7 @@ import {
   t,
   translate,
   translatePlural,
+  validLocale,
 } from '@/i18n/core';
 import fr from '@/i18n/locales/fr';
 
@@ -108,5 +109,14 @@ describe('i18n', () => {
     expect(aiLanguageName('pt')).toBe('português');
     expect(aiLanguageName('xx')).toBe('français');
     expect(aiLanguageName(undefined)).toBe('français');
+  });
+});
+
+describe('balises de locale invalides', () => {
+  it('nettoie les variantes POSIX et rejette les balises invalides', () => {
+    expect(validLocale('en-US@posix')).toBe('en-US');
+    expect(validLocale('fr_FR')).toBe('fr-FR');
+    expect(validLocale('!!')).toBeNull();
+    expect(localeFor('en', ['en-US@posix'])).toBe('en-US');
   });
 });
