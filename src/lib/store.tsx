@@ -10,6 +10,7 @@ import type { DiagnosisRecord, Vehicle } from '@/lib/diagnosis';
 
 export const FREE_DIAGNOSES_PER_MONTH = 3;
 export const FREE_QUOTES_PER_MONTH = 1;
+export const FREE_CT_REPORTS_PER_MONTH = 1;
 
 export type LogEntry = { id: string; vehicleId: string; date: string; mileage: string; operation: string };
 
@@ -21,7 +22,9 @@ export type AppState = {
   log: LogEntry[];
   /** Étapes cochées par guide. */
   progress: Record<string, boolean[]>;
-  usage: { month: string; diagnoses: number; quotes: number };
+  usage: { month: string; diagnoses: number; quotes: number; ct: number };
+  /** Diagnostics achetés à l'unité (offre « une panne »), utilisés après le quota gratuit. */
+  credits: number;
   /** Premium simulé, utilisé quand aucun compte RevenueCat n'est configuré. */
   demoPremium: boolean;
 };
@@ -37,7 +40,8 @@ function initialState(): AppState {
     history: [],
     log: [],
     progress: {},
-    usage: { month: month(), diagnoses: 0, quotes: 0 },
+    usage: { month: month(), diagnoses: 0, quotes: 0, ct: 0 },
+    credits: 0,
     demoPremium: false,
   };
 }
@@ -75,7 +79,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setState((s) => {
       const next = fn(s);
       // Le compteur gratuit repart le 1er du mois.
-      return next.usage.month === month() ? next : { ...next, usage: { month: month(), diagnoses: 0, quotes: 0 } };
+      return next.usage.month === month() ? next : { ...next, usage: { month: month(), diagnoses: 0, quotes: 0, ct: 0 } };
     });
   }, []);
 
@@ -99,6 +103,7 @@ export function usage(state: AppState) {
   return {
     diagnoses: fresh ? state.usage.diagnoses : 0,
     quotes: fresh ? state.usage.quotes : 0,
+    ct: fresh ? (state.usage.ct ?? 0) : 0,
   };
 }
 

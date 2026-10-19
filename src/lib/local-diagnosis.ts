@@ -2,6 +2,7 @@
  * Diagnostic de secours sans IA : codes et symptômes de la base intégrée.
  * Utilisé hors connexion ou quand le serveur IA ne répond pas.
  */
+import { knownIssuesFor } from '@/data/known-issues';
 import { OBD_CODES } from '@/data/obd-codes';
 import { SYMPTOMS } from '@/data/symptoms';
 import { Cause, Diagnosis, DiagnosisRequest, isHighVoltage } from '@/lib/diagnosis';
@@ -78,6 +79,10 @@ export function localDiagnosis(req: DiagnosisRequest): Diagnosis {
       'Lire ou relire les codes défaut avec un dongle OBD2.',
       'Contrôler les niveaux : huile, liquide de refroidissement, liquide de frein.',
       'Noter dans quelles conditions le problème apparaît (froid, chaud, en charge).',
+      ...knownIssuesFor(req.vehicle)
+        .filter((k) => k.severity !== 'info')
+        .slice(0, 2)
+        .map((k) => `Panne connue sur ce véhicule : ${k.title}. ${k.advice}`),
     ],
     safety: [
       'Ne travaillez jamais sous un véhicule tenu par le seul cric.',

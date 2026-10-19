@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { Platform, View } from 'react-native';
 
 import { DiagnosisView } from '@/components/diagnosis-view';
+import { KnownIssues } from '@/components/known-issues';
+import { LiveData } from '@/components/live-data';
+import { NoiseFinder } from '@/components/noise-finder';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Eyebrow, Field, LockBox, Row, Screen, Tag, Title } from '@/components/ui';
 import { VehicleCard } from '@/components/vehicle-editor';
@@ -19,7 +22,8 @@ import { FREE_DIAGNOSES_PER_MONTH, newId, usage, useCurrentVehicle, useStore } f
 
 export default function DiagnosticScreen() {
   const { state, update } = useStore();
-  const { isPremium } = usePremium();
+  const { isPremium, buyCredit, creditPrice } = usePremium();
+  const [buying, setBuying] = useState(false);
   const vehicle = useCurrentVehicle();
   const obd = useObdReader();
 
@@ -33,7 +37,10 @@ export default function DiagnosticScreen() {
 
   const used = usage(state).diagnoses;
   const left = Math.max(0, FREE_DIAGNOSES_PER_MONTH - used);
-  const blocked = !isPremium && left === 0;
+  const credits = state.credits ?? 0;
+  // Après le quota gratuit, un diagnostic acheté à l'unité prend le relais.
+  const useCredit = !isPremium && left === 0 && credits > 0;
+  const blocked = !isPremium && left === 0 && credits === 0;
   const latest = result ?? state.history[0];
 
   const scanned = obd.scan ? [...obd.scan.stored, ...obd.scan.pending] : [];
@@ -80,7 +87,8 @@ export default function DiagnosticScreen() {
       ...s,
       vehicles: s.vehicles.map((x) => (x.id === v.id ? v : x)),
       history: [record, ...s.history].slice(0, 50),
-      usage: { ...s.usage, diagnoses: s.usage.diagnoses + (isPremium || record.source === 'offline' ? 0 : 1) },
+      usage: { ...s.usage, diagnoses: s.usage.diagnoses + (isPremium || useCredit || record.source === 'offline' ? 0 : 1) },
+      credits: useCredit && record.source === 'ai' ? Math.max(0, (s.credits ?? 0) - 1) : (s.credits ?? 0),
     }));
   };
 
@@ -91,6 +99,8 @@ export default function DiagnosticScreen() {
       </Title>
 
       <VehicleCard />
+
+      {vehicle ? <KnownIssues vehicle={vehicle} /> : null}
 
       {vehicle ? (
         <Card>
@@ -121,6 +131,22 @@ export default function DiagnosticScreen() {
         </Card>
       ) : null}
 
+      {vehicle && Platform.OS !== 'web' ? (
+        isPremium ? (
+          <LiveData obd={obd} />
+        ) : (
+          <Card>
+            <Eyebrow>Données en direct</Eyebrow>
+            <LockBox
+              text="Régime, température, charge de la batterie, corrections de richesse : suivez le moteur en direct avec votre dongle et repérez les valeurs anormales."
+              onUnlock={() => router.push('/premium')}
+            />
+          </Card>
+        )
+      ) : null}
+
+      {vehicle ? <NoiseFinder onAdd={(sentence) => setSymptoms((t) => (t ? `${t}\n${sentence}` : sentence))} /> : null}
+
       {vehicle ? (
         <Card>
           <Eyebrow>Symptômes fréquents</Eyebrow>
@@ -143,15 +169,38 @@ export default function DiagnosticScreen() {
             </Row>
           ) : null}
           {blocked ? (
-            <LockBox
-              text={`Vos ${FREE_DIAGNOSES_PER_MONTH} diagnostics gratuits du mois sont utilisés. Le compteur repart le 1er du mois.`}
-              onUnlock={() => router.push('/premium')}
-            />
+            <>
+              <LockBox
+                text={`Vos ${FREE_DIAGNOSES_PER_MONTH} diagnostics gratuits du mois sont utilisés. Le compteur repart le 1er du mois.`}
+                onUnlock={() => router.push('/premium')}
+              />
+              <Row>
+                <Button
+                  kind="ghost"
+                  loading={buying}
+                  label={`Un seul diagnostic : ${creditPrice}`}
+                  onPress={async () => {
+                    setBuying(true);
+                    try {
+                      if (!(await buyCredit())) setNote('Achat annulé.');
+                    } catch {
+                      setNote('Le paiement n’a pas abouti. Aucun montant n’a été débité.');
+                    } finally {
+                      setBuying(false);
+                    }
+                  }}
+                />
+              </Row>
+            </>
           ) : (
             <Row>
               <Button label="Lancer le diagnostic" loading={running} onPress={run} />
               <ThemedText type="small" themeColor="textSecondary">
-                {isPremium ? 'Diagnostics illimités' : `${left} diagnostic${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} ce mois-ci`}
+                {isPremium
+                  ? 'Diagnostics illimités'
+                  : useCredit
+                    ? `${credits} diagnostic${credits > 1 ? 's' : ''} acheté${credits > 1 ? 's' : ''}`
+                    : `${left} diagnostic${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} ce mois-ci`}
               </ThemedText>
             </Row>
           )}
@@ -168,6 +217,18 @@ export default function DiagnosticScreen() {
             </ThemedText>
           </View>
           <Button kind="ghost" label="Vérifier un devis" onPress={() => router.push('/devis')} />
+        </Row>
+      </Card>
+
+      <Card>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <View style={{ flex: 1, minWidth: 200, gap: Spacing.one }}>
+            <ThemedText type="smallBold">Contrôle technique</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Les vérifications à faire avant d’y aller, et l’explication de chaque défaut de votre procès-verbal.
+            </ThemedText>
+          </View>
+          <Button kind="ghost" label="Préparer le contrôle" onPress={() => router.push('/controle-technique')} />
         </Row>
       </Card>
 

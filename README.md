@@ -1,76 +1,102 @@
 # Clé de 12
 
-App mobile de diagnostic et de réparation automobile assistés par IA, pour les mécaniciens amateurs et tous ceux qui veulent comprendre leur voiture avant d'aller au garage. iOS, Android et web, en français, pensée pour le parc français.
+*[Version française](README.fr.md)*
 
-## Ce que fait l'app
+Clé de 12 is a mobile app for AI-assisted car diagnosis and repair. It is built for amateur mechanics and for anyone who wants to understand their car before going to a garage. It runs on iOS, Android and the web. The interface is in French and targets the French car market.
 
-- **Diagnostic IA** : véhicule, symptômes (texte ou boutons rapides), codes défaut et photo (Premium). Claude rend un verdict de sécurité (rouler, prudence, arrêt), des causes classées avec probabilité, difficulté et coûts pièces et garage, et les contrôles à faire dans l'ordre. Sans réseau ou sans serveur IA, une base intégrée de 26 codes et 12 symptômes prend le relais.
-- **Lecture des codes OBD2 en Bluetooth** avec n'importe quel dongle ELM327 Bluetooth Low Energy à 15–30 € (Vgate iCar Pro BLE, Veepeak BLE…) : codes confirmés, codes en attente, voyant, VIN, effacement.
-- **Catalogue gratuit des marques et modèles** vendus en France depuis 1995 (plus de 40 marques), filtré par année, avec les motorisations courantes des modèles les plus réparés. La saisie libre reste possible.
-- **Identification par la plaque** d'immatriculation (fournisseur SIV à brancher).
-- **« Mon devis est-il normal ? »** : photo d'un devis de garage, comparée ligne par ligne aux prix du marché.
-- **Guides pas à pas** avec outillage, étapes à cocher et couples de serrage, plan de réparation sur mesure (Premium).
-- **Liens prix des pièces** (Oscaro, Mister-Auto, Autodoc) et **devis garage** (Vroomly, iDGARAGE) pour les réparations de difficulté 4 ou 5, prêts pour l'affiliation.
-- **Retour « ça a réglé le problème ? »** enregistré avec chaque diagnostic.
-- **Mon garage** : véhicules, carnet d'entretien (Premium), historique.
+## What the app does
 
-## Offres
+- **AI diagnosis**: you give the vehicle, symptoms (free text or quick buttons), fault codes and a photo (Premium). Claude returns:
+  - a safety verdict: OK to drive, drive with care, or do not drive;
+  - likely causes ranked by probability, with difficulty and parts and garage costs;
+  - checks to do, in order.
 
-| | Gratuit | Premium (6,99 €/mois ou 49 €/an) |
+  When offline or without the AI server, a built-in base of 26 codes and 12 symptoms takes over.
+- **OBD2 code reading over Bluetooth** with any ELM327 Bluetooth Low Energy dongle costing €15–30 (Vgate iCar Pro BLE, Veepeak BLE…). It reads confirmed and pending codes, the warning-light state and the VIN, and can clear codes.
+- **Live engine data** (Premium):
+  - engine speed, road speed, coolant and oil temperature, battery voltage;
+  - engine load, fuel trims and mass airflow.
+
+  Out-of-range values are flagged with a plain-language explanation.
+- **Free catalog of makes and models** sold in France since 1995: 44 makes and 434 models. Models are filtered by year, and common engines are listed for the most-repaired models. Free-text entry still works.
+- **Known issues by engine**, for example the PureTech wet timing belt, the 1.6 HDi turbo, 1.5 dCi bearings and the THP timing chain. They are shown as soon as the vehicle is added and are fed into the diagnosis.
+- **Noise finder**: answer two questions (when the noise happens, what it sounds like) to get likely causes. A "do not drive" warning appears when needed.
+- **French MOT (contrôle technique)**:
+  - a 35-point checklist to run at home before the inspection;
+  - photo analysis of the inspection report, defect by defect, with whether you can fix it yourself and what it costs.
+- **"Is my quote fair?"**: photograph a garage quote and the app compares each line to market prices.
+- **Upcoming maintenance**: a maintenance plan adapted to the engine and matched against the logbook. It handles timing belt or chain, diesel or petrol, and electric cars.
+- **Step-by-step guides** with tools, checkable steps and torque values, plus a tailored repair plan (Premium).
+- **Parts price links** (Oscaro, Mister-Auto, Autodoc) and **garage quote links** (Vroomly, iDGARAGE) for repairs rated 4 or 5 in difficulty. These links are ready for affiliate IDs.
+- **"Did it fix the problem?" feedback**, saved with each diagnosis.
+- **My garage**: vehicles, a maintenance logbook with PDF export (Premium), and history.
+
+## Plans
+
+| | Free | Premium (€6.99/month or €49/year) |
 |---|---|---|
-| Lecture OBD2, verdict de sécurité, coûts | ✓ | ✓ |
-| Catalogue de toutes les marques et modèles | ✓ | ✓ |
-| Diagnostics IA | 3 par mois | Illimités |
-| Analyse de devis | 1 par mois | Illimitée |
-| Photo, plan sur mesure, questions de suivi | | ✓ |
-| Guides avancés, plusieurs véhicules, carnet | | ✓ |
+| OBD2 reading, safety verdict, costs | ✓ | ✓ |
+| Make and model catalog, known issues | ✓ | ✓ |
+| Noise finder, upcoming maintenance, MOT checklist | ✓ | ✓ |
+| AI diagnoses | 3 per month | Unlimited |
+| Quote analysis | 1 per month | Unlimited |
+| MOT report analysis | 1 per month | Unlimited |
+| Live engine data | | ✓ |
+| Photo, tailored plan, follow-up questions | | ✓ |
+| Advanced guides, several vehicles, logbook and PDF export | | ✓ |
 
-L'abonnement passe par RevenueCat (App Store, Google Play, web). Sans clé RevenueCat, l'app est en **mode démo** : Premium se débloque gratuitement sur l'appareil.
+A **one-off "single fault" offer at €2.99** gives one full AI diagnosis without a subscription once the free quota is used up.
+
+Subscriptions go through RevenueCat (App Store, Google Play, web). The one-off diagnosis is the `diag_unit` package, a consumable product, in the current RevenueCat offering. Without a RevenueCat key the app runs in **demo mode**: Premium and one-off diagnoses unlock for free on the device.
 
 ## Architecture
 
 ```
 src/
-  app/                 Écrans (Expo Router) et routes serveur /api
-    (diag)/            Diagnostic, devis, résultat
-    guides/            Liste et détail des guides
-    api/*+api.ts       diagnose, repair-plan, chat, quote, vehicle
-  components/          Interface (ui.tsx, diagnosis-view.tsx, vehicle-editor.tsx)
-  data/                Codes OBD2, symptômes, guides, catalogue véhicules
-  features/obd/        Protocole ELM327 (pur, testé), session OBD, transport BLE
-  lib/                 Types partagés, stockage local, achats, liens partenaires
-  server/              Appels Claude, vérification Premium, plaque, validation
+  app/                 Screens (Expo Router) and /api server routes
+    (diag)/            Diagnosis, quote, MOT, result
+    guides/            Guide list and detail
+    api/*+api.ts       diagnose, repair-plan, chat, quote, ct, vehicle
+  components/          UI (base kit, diagnosis, vehicle, live data, noises, known issues)
+  data/                OBD2 codes, symptoms, guides, vehicle catalog, known issues,
+                       maintenance, noises, MOT checklist
+  features/obd/        ELM327 protocol (pure, tested), OBD session, BLE transport
+  lib/                 Shared types, local storage, purchases, partner links, PDF export
+  server/              Claude calls, Premium check, plate lookup, validation
 ```
 
-- **IA** : les routes `/api` appellent l'API Claude (`@anthropic-ai/sdk`, modèle `claude-opus-5-5` par défaut, réglable par `CLAUDE_MODEL`) avec des sorties structurées validées par Zod. La clé reste sur le serveur. Les refus des filtres de sécurité sont relancés automatiquement sur un modèle de repli (`fallbacks: "default"`).
-- **Premium côté serveur** : les routes Premium vérifient l'abonnement auprès de RevenueCat avec l'identifiant envoyé par l'app.
-- **Données techniques** : `src/lib/tech-data.ts` définit l'interface d'un fournisseur sous licence (HaynesPro, ETAI/RTA). En attendant, les couples sont affichés comme valeurs types.
-- **Plaque** : `src/server/plate-lookup.ts` attend un fournisseur SIV (`PLATE_API_URL`, `PLATE_API_KEY`) ; adaptez `mapProvider` à sa réponse.
+- **AI**:
+  - The `/api` routes call the Claude API (`@anthropic-ai/sdk`) with structured outputs validated by Zod. The API key stays on the server.
+  - Analysis (diagnosis, photos, quotes, MOT reports, repair plans) uses `claude-sonnet-5-5`. The follow-up chat uses `claude-haiku-5-5`. That costs about half as much as running everything on Opus. You can change both with `CLAUDE_MODEL_ANALYSIS` and `CLAUDE_MODEL_CHAT`.
+  - When Claude's safety filters refuse a request, it is retried automatically on a fallback model (`fallbacks: "default"`).
+- **Server-side Premium**: Premium routes check the subscription with RevenueCat, using the ID the app sends.
+- **Technical data**: `src/lib/tech-data.ts` defines the interface for a licensed provider (HaynesPro, ETAI/RTA). Until one is connected, torque values are shown as typical values.
+- **Plate lookup**: `src/server/plate-lookup.ts` expects a French vehicle registry (SIV) data provider, set with `PLATE_API_URL` and `PLATE_API_KEY`. Adapt `mapProvider` to its response.
 
-## Démarrer
+## Getting started
 
 ```bash
 npm install
-cp .env.example .env.local   # renseignez au moins ANTHROPIC_API_KEY
-npx expo start               # web : touche w
+cp .env.example .env.local   # set at least ANTHROPIC_API_KEY
+npx expo start               # web: press w, then open http://localhost:8081
 ```
 
-Le Bluetooth et RevenueCat sont des modules natifs : sur téléphone, utilisez un build de développement plutôt qu'Expo Go.
+Bluetooth, PDF export and RevenueCat are native modules. On a phone, use a development build rather than Expo Go.
 
 ```bash
-npx eas-cli@latest build --profile development --platform android   # ou ios
+npx eas-cli@latest build --profile development --platform android   # or ios
 ```
 
-Déploiement du serveur et du site web sur EAS Hosting :
+To deploy the server and website to EAS Hosting:
 
 ```bash
 npx expo export -p web
 npx eas-cli@latest deploy
 ```
 
-Puis renseignez l'URL obtenue dans `app.json` (`plugins` → `expo-router` → `origin`) pour que l'app mobile appelle ce serveur.
+Then put the resulting URL in `app.json` (`plugins` → `expo-router` → `origin`) so the mobile app calls that server.
 
-## Vérifications
+## Checks
 
 ```bash
 npm run typecheck
@@ -78,13 +104,12 @@ npm run lint
 npm test
 ```
 
-## Prochaines étapes
+## Next steps
 
-1. Comptes utilisateurs et synchronisation (carnet, historique), avec un quota gratuit appliqué côté serveur.
-2. Contrat avec un fournisseur SIV (plaque) et un fournisseur de données techniques sous licence.
-3. Catalogue de pièces compatibles avec prix réels (TecAlliance ou API vendeurs) et identifiants d'affiliation.
-4. Préparation du contrôle technique et analyse du procès-verbal de contre-visite.
-5. Diagnostic par le bruit, rappels constructeur et pannes connues par moteur.
-6. Offre « une panne » à 2,99 € pour ceux qui ne réparent pas eux-mêmes.
+1. User accounts and sync (logbook, history, credits), with free quotas enforced on the server.
+2. Contracts with a SIV plate data provider and a licensed technical data provider.
+3. Compatible parts catalog with real prices (TecAlliance or seller APIs) and affiliate IDs.
+4. Manufacturer recalls by VIN, and maintenance notifications.
+5. Diagnosis from a noise recording, once an audio model has been validated.
 
-Le diagnostic est indicatif et ne remplace pas l'avis d'un professionnel. Freins, direction et haute tension renvoient toujours vers un garage.
+Diagnoses are for guidance only and do not replace a professional's opinion. Brakes, steering and high-voltage systems always point the user to a garage.

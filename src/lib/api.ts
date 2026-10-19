@@ -2,6 +2,7 @@
  * Appels aux routes `/api` du serveur Clé de 12. Sur mobile, les URL relatives
  * pointent vers l'origine déclarée dans app.json (plugin expo-router).
  */
+import type { CtReport } from '@/lib/ct';
 import type { Diagnosis, DiagnosisRequest, Vehicle } from '@/lib/diagnosis';
 import type { QuoteReview } from '@/lib/quote';
 import type { RepairPlan } from '@/lib/repair-plan';
@@ -45,6 +46,7 @@ export const api = {
     post<{ text: string }>('/api/chat', { vehicle, context, messages }),
   quote: (vehicle: VehicleInput, photo: string, context?: string) =>
     post<QuoteReview>('/api/quote', { vehicle, photo, context }),
+  ct: (vehicle: VehicleInput, photo: string) => post<CtReport>('/api/ct', { vehicle, photo }),
   plate: (plate: string) =>
     call<Omit<Vehicle, 'id' | 'mileage'>>(`/api/vehicle?plate=${encodeURIComponent(plate)}`),
 };

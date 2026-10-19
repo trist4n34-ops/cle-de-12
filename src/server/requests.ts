@@ -46,6 +46,11 @@ export const QuoteInput = z.object({
   context: z.string().max(4000).optional(),
 });
 
+export const CtInput = z.object({
+  vehicle: VehicleInput,
+  photo: z.string().min(1).max(MAX_PHOTO),
+});
+
 export async function readJson<T extends z.ZodType>(request: Request, schema: T): Promise<z.infer<T> | Response> {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Requête invalide.' }, { status: 400 });
