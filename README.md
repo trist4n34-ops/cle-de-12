@@ -6,6 +6,7 @@ App mobile de diagnostic et de réparation automobile assistés par IA, pour les
 
 - **Diagnostic IA** : véhicule, symptômes (texte ou boutons rapides), codes défaut et photo (Premium). Claude rend un verdict de sécurité (rouler, prudence, arrêt), des causes classées avec probabilité, difficulté et coûts pièces et garage, et les contrôles à faire dans l'ordre. Sans réseau ou sans serveur IA, une base intégrée de 26 codes et 12 symptômes prend le relais.
 - **Lecture des codes OBD2 en Bluetooth** avec n'importe quel dongle ELM327 Bluetooth Low Energy à 15–30 € (Vgate iCar Pro BLE, Veepeak BLE…) : codes confirmés, codes en attente, voyant, VIN, effacement.
+- **Catalogue gratuit des marques et modèles** vendus en France depuis 1995 (plus de 40 marques), filtré par année, avec les motorisations courantes des modèles les plus réparés. La saisie libre reste possible.
 - **Identification par la plaque** d'immatriculation (fournisseur SIV à brancher).
 - **« Mon devis est-il normal ? »** : photo d'un devis de garage, comparée ligne par ligne aux prix du marché.
 - **Guides pas à pas** avec outillage, étapes à cocher et couples de serrage, plan de réparation sur mesure (Premium).
@@ -18,6 +19,7 @@ App mobile de diagnostic et de réparation automobile assistés par IA, pour les
 | | Gratuit | Premium (6,99 €/mois ou 49 €/an) |
 |---|---|---|
 | Lecture OBD2, verdict de sécurité, coûts | ✓ | ✓ |
+| Catalogue de toutes les marques et modèles | ✓ | ✓ |
 | Diagnostics IA | 3 par mois | Illimités |
 | Analyse de devis | 1 par mois | Illimitée |
 | Photo, plan sur mesure, questions de suivi | | ✓ |
@@ -34,7 +36,7 @@ src/
     guides/            Liste et détail des guides
     api/*+api.ts       diagnose, repair-plan, chat, quote, vehicle
   components/          Interface (ui.tsx, diagnosis-view.tsx, vehicle-editor.tsx)
-  data/                Codes OBD2, symptômes, guides intégrés
+  data/                Codes OBD2, symptômes, guides, catalogue véhicules
   features/obd/        Protocole ELM327 (pur, testé), session OBD, transport BLE
   lib/                 Types partagés, stockage local, achats, liens partenaires
   server/              Appels Claude, vérification Premium, plaque, validation
