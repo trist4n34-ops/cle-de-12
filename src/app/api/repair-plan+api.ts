@@ -1,11 +1,12 @@
 import { repairPlan } from '@/server/claude';
-import { handle, requirePremium } from '@/server/http';
-import { readJson, RepairPlanInput } from '@/server/requests';
+import { aiRoute, preflight } from '@/server/http';
+import { RepairPlanInput } from '@/server/requests';
 
-export async function POST(request: Request) {
-  const input = await readJson(request, RepairPlanInput);
-  if (input instanceof Response) return input;
-  const denied = await requirePremium(request);
-  if (denied) return denied;
-  return handle(() => repairPlan(input));
+/** Plan de réparation sur mesure : Premium. */
+export function POST(request: Request) {
+  return aiRoute(request, RepairPlanInput, 'premium', repairPlan);
+}
+
+export function OPTIONS(request: Request) {
+  return preflight(request);
 }

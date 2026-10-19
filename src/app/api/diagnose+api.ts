@@ -1,13 +1,15 @@
 import { diagnose } from '@/server/claude';
-import { handle, requirePremium } from '@/server/http';
-import { DiagnoseInput, readJson } from '@/server/requests';
+import { aiRoute, preflight } from '@/server/http';
+import { DiagnoseInput } from '@/server/requests';
 
-export async function POST(request: Request) {
-  const input = await readJson(request, DiagnoseInput);
-  if (input instanceof Response) return input;
-  if (input.photo) {
-    const denied = await requirePremium(request);
-    if (denied) return denied;
-  }
-  return handle(() => diagnose(input));
+/**
+ * Diagnostic : quota gratuit mensuel puis diagnostics achetés à l'unité, vérifiés
+ * par le serveur ; illimité en Premium. La photo est réservée à Premium.
+ */
+export function POST(request: Request) {
+  return aiRoute(request, DiagnoseInput, (input) => (input.photo ? 'premium' : 'diagnose'), diagnose);
+}
+
+export function OPTIONS(request: Request) {
+  return preflight(request);
 }

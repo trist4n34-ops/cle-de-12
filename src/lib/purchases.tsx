@@ -39,14 +39,35 @@ const PremiumContext = createContext<PremiumState | null>(null);
 
 const hasEntitlement = (info: CustomerInfo) => !!info.entitlements.active[ENTITLEMENT];
 
+/** Identifiant avec lequel le SDK RevenueCat (un singleton) a été configuré. */
+let rcUserId: string | null = null;
+
 export function PremiumProvider({ children }: { children: ReactNode }) {
   const { state, ready, update } = useStore();
   const [paid, setPaid] = useState(false);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
 
+  // RevenueCat est configuré une seule fois, avec l'identifiant de la session
+  // signée par le serveur : c'est celui que le serveur vérifie auprès de RevenueCat.
+  const sessionUserId = state.session?.userId;
+  const configured = !DEMO_MODE && ready && !!API_KEY && !!sessionUserId;
+
   useEffect(() => {
-    if (DEMO_MODE || !ready || !API_KEY) return;
-    Purchases.configure({ apiKey: API_KEY, appUserID: state.userId });
+    if (!configured || !API_KEY || !sessionUserId || sessionUserId === rcUserId) return;
+    if (rcUserId === null) {
+      Purchases.configure({ apiKey: API_KEY, appUserID: sessionUserId });
+    } else {
+      // Session recréée par le serveur : on bascule RevenueCat sur le nouvel identifiant.
+      // « Restaurer les achats » rattache ensuite l'abonnement du store à ce compte.
+      Purchases.logIn(sessionUserId)
+        .then(({ customerInfo }) => setPaid(hasEntitlement(customerInfo)))
+        .catch(() => undefined);
+    }
+    rcUserId = sessionUserId;
+  }, [configured, sessionUserId]);
+
+  useEffect(() => {
+    if (!configured) return;
     const listener = (info: CustomerInfo) => setPaid(hasEntitlement(info));
     Purchases.addCustomerInfoUpdateListener(listener);
     Purchases.getCustomerInfo().then(listener).catch(() => undefined);
@@ -56,8 +77,7 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
     return () => {
       Purchases.removeCustomerInfoUpdateListener(listener);
     };
-    // L'identifiant utilisateur est fixé au premier lancement.
-  }, [ready, state.userId]);
+  }, [configured]);
 
   const purchase = useCallback(async (pkg: PurchasesPackage) => {
     try {
@@ -71,10 +91,12 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const restore = useCallback(async () => {
+    // Sans session (premier lancement hors ligne), RevenueCat n'est pas encore configuré.
+    if (!configured) throw new Error('Connectez-vous à internet puis réessayez.');
     const info = await Purchases.restorePurchases();
     setPaid(hasEntitlement(info));
     return hasEntitlement(info);
-  }, []);
+  }, [configured]);
 
   const credit = packages.find((p) => p.identifier === CREDIT_PACKAGE);
 

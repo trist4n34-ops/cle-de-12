@@ -8,14 +8,19 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 
 import type { DiagnosisRecord, Vehicle } from '@/lib/diagnosis';
 
-export const FREE_DIAGNOSES_PER_MONTH = 3;
-export const FREE_QUOTES_PER_MONTH = 1;
-export const FREE_CT_REPORTS_PER_MONTH = 1;
+// Définis dans un module sans dépendance, partagé avec le serveur qui les applique.
+export { FREE_CT_REPORTS_PER_MONTH, FREE_DIAGNOSES_PER_MONTH, FREE_QUOTES_PER_MONTH } from '@/lib/quotas';
 
 export type LogEntry = { id: string; vehicleId: string; date: string; mileage: string; operation: string };
 
 export type AppState = {
+  /** Ancien identifiant tiré par l'app. Conservé pour compatibilité, il n'est plus envoyé au serveur. */
   userId: string;
+  /**
+   * Session signée par le serveur (/api/session). `session.userId` est l'identité
+   * reconnue par le serveur et l'appUserID RevenueCat.
+   */
+  session?: { userId: string; token: string };
   vehicles: Vehicle[];
   vehicleId: string | null;
   history: DiagnosisRecord[];
@@ -27,6 +32,8 @@ export type AppState = {
   credits: number;
   /** Premium simulé, utilisé quand aucun compte RevenueCat n'est configuré. */
   demoPremium: boolean;
+  /** Langue choisie par l'utilisateur (fr, en…). Absente : langue de l'appareil. */
+  language?: string;
 };
 
 const KEY = 'cle12:state:v1';

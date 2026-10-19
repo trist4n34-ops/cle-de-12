@@ -73,7 +73,8 @@ describe('CtReportSchema', () => {
 describe('CtInput', () => {
   it('exige une photo', () => {
     const vehicle = { make: 'Renault', model: 'Clio', year: '2015', mileage: '120000', engine: '1.5 dCi', fuel: 'Diesel' };
-    expect(CtInput.safeParse({ vehicle, photo: 'abc' }).success).toBe(true);
+    // En-tête JPEG (FF D8 FF E0) en base64.
+    expect(CtInput.safeParse({ vehicle, photo: '/9j/4AAQSkZJRgABAQ==' }).success).toBe(true);
     expect(CtInput.safeParse({ vehicle, photo: '' }).success).toBe(false);
   });
 });

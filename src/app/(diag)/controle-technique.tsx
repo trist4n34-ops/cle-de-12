@@ -9,6 +9,7 @@ import { Spacing } from '@/constants/theme';
 import { CT_AREAS, CT_CHECKLIST } from '@/data/ct-checklist';
 import { findGuide } from '@/data/guides';
 import { useTheme } from '@/hooks/use-theme';
+import { useT } from '@/i18n';
 import { api, ApiError, stripId } from '@/lib/api';
 import { CtLevel, CtReport } from '@/lib/ct';
 import { garageLinks, partLinks } from '@/lib/partners';
@@ -16,16 +17,16 @@ import { pickPhoto } from '@/lib/photo';
 import { usePremium } from '@/lib/purchases';
 import { FREE_CT_REPORTS_PER_MONTH, usage, useCurrentVehicle, useStore } from '@/lib/store';
 
-const LEVEL: Record<CtLevel, { label: string; fg: 'ok' | 'warn' | 'stop'; bg: 'okBg' | 'warnBg' | 'stopBg' }> = {
-  mineure: { label: 'Mineure', fg: 'ok', bg: 'okBg' },
-  majeure: { label: 'Majeure', fg: 'warn', bg: 'warnBg' },
-  critique: { label: 'Critique', fg: 'stop', bg: 'stopBg' },
-};
+const LEVEL = {
+  mineure: { label: 'ct.level.mineure', fg: 'ok', bg: 'okBg' },
+  majeure: { label: 'ct.level.majeure', fg: 'warn', bg: 'warnBg' },
+  critique: { label: 'ct.level.critique', fg: 'stop', bg: 'stopBg' },
+} as const satisfies Record<CtLevel, { label: string; fg: 'ok' | 'warn' | 'stop'; bg: 'okBg' | 'warnBg' | 'stopBg' }>;
 
 const VERDICT = {
-  critique: { urgency: 'stop', title: 'Défaillance critique' },
-  majeure: { urgency: 'prudence', title: 'Contre-visite obligatoire' },
-  mineure: { urgency: 'ok', title: 'Pas de contre-visite' },
+  critique: { urgency: 'stop', title: 'ct.verdict.critique' },
+  majeure: { urgency: 'prudence', title: 'ct.verdict.majeure' },
+  mineure: { urgency: 'ok', title: 'ct.verdict.mineure' },
 } as const;
 
 function worstLevel(report: CtReport): CtLevel {
@@ -35,16 +36,18 @@ function worstLevel(report: CtReport): CtLevel {
 
 function LevelBadge({ level }: { level: CtLevel }) {
   const theme = useTheme();
+  const { t } = useT();
   const l = LEVEL[level];
   return (
     <View style={[styles.badge, { backgroundColor: theme[l.bg] }]}>
-      <ThemedText style={[styles.badgeText, { color: theme[l.fg] }]}>{l.label}</ThemedText>
+      <ThemedText style={[styles.badgeText, { color: theme[l.fg] }]}>{t(l.label)}</ThemedText>
     </View>
   );
 }
 
 export default function ControleTechniqueScreen() {
   const theme = useTheme();
+  const { t, tn } = useT();
   const { state, update } = useStore();
   const { isPremium } = usePremium();
   const vehicle = useCurrentVehicle();
@@ -77,7 +80,7 @@ export default function ControleTechniqueScreen() {
       setReport(await api.ct(stripId(vehicle), photo));
       if (!isPremium) update((s) => ({ ...s, usage: { ...s.usage, ct: (s.usage.ct ?? 0) + 1 } }));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Analyse impossible.');
+      setError(e instanceof ApiError ? e.message : t('common.analysisFailed'));
     } finally {
       setLoading(false);
     }
@@ -87,26 +90,22 @@ export default function ControleTechniqueScreen() {
 
   return (
     <Screen>
-      <Title lede="Le contrôle technique vérifie 133 points. Chaque défaut est classé mineur, majeur ou critique : seuls les deux derniers imposent une contre-visite.">
-        Contrôle technique
-      </Title>
+      <Title lede={t('ct.lede')}>{t('ct.title')}</Title>
 
       <View style={[styles.safety, { backgroundColor: theme.stopBg, borderLeftColor: theme.stop }]}>
         <ThemedText type="smallBold" style={{ color: theme.stop }}>
-          Défaillance critique : la voiture ne peut rouler que le jour du contrôle, jusqu’à minuit.
+          {t('ct.safety.title')}
         </ThemedText>
-        <ThemedText type="small">
-          Ensuite, elle ne doit plus circuler avant réparation et contre-visite (dans les 2 mois). Défaillance majeure : vous pouvez rouler, mais la contre-visite doit avoir lieu dans les 2 mois.
-        </ThemedText>
+        <ThemedText type="small">{t('ct.safety.body')}</ThemedText>
       </View>
 
       <Card style={{ gap: Spacing.two }}>
         <Row style={{ justifyContent: 'space-between' }}>
-          <Heading>Avant le contrôle</Heading>
-          <Tag label={`${done} / ${CT_CHECKLIST.length} vérifiés`} />
+          <Heading>{t('ct.before.title')}</Heading>
+          <Tag label={t('ct.before.progress', { done, total: CT_CHECKLIST.length })} />
         </Row>
         <ThemedText type="small" themeColor="textSecondary">
-          20 minutes devant chez vous, à deux si possible pour les feux. Chaque point indique le niveau de défaillance qu’il déclencherait au contrôle.
+          {t('ct.before.intro')}
         </ThemedText>
         {CT_AREAS.map((area) => (
           <View key={area.id} style={{ paddingTop: Spacing.two }}>
@@ -143,25 +142,25 @@ export default function ControleTechniqueScreen() {
             )}
           </View>
         ))}
-        {done ? <Button kind="ghost" label="Tout décocher" onPress={reset} /> : null}
+        {done ? <Button kind="ghost" label={t('ct.uncheckAll')} onPress={reset} /> : null}
       </Card>
 
-      <Heading>Analyser mon procès-verbal</Heading>
+      <Heading>{t('ct.report.title')}</Heading>
       <ThemedText themeColor="textSecondary">
-        Contre-visite à passer ? Prenez en photo la page des défaillances du procès-verbal : chaque défaut est expliqué, avec ce que vous pouvez réparer vous-même et le coût.
+        {t('ct.report.intro')}
       </ThemedText>
       {!vehicle ? (
-        <ThemedText>Ajoutez d’abord votre véhicule dans l’onglet Diagnostic.</ThemedText>
+        <ThemedText>{t('common.addVehicleFirst')}</ThemedText>
       ) : blocked ? (
-        <LockBox text="Votre analyse de procès-verbal gratuite du mois est utilisée. Premium les rend illimitées." onUnlock={() => router.push('/premium')} />
+        <LockBox text={t('ct.report.locked')} onUnlock={() => router.push('/premium')} />
       ) : (
         <Card>
           <Row>
-            {Platform.OS !== 'web' ? <Button label="Photographier le PV" loading={loading} onPress={() => analyse('camera')} /> : null}
-            <Button kind={Platform.OS === 'web' ? 'primary' : 'ghost'} label="Choisir une photo" loading={loading} onPress={() => analyse('library')} />
+            {Platform.OS !== 'web' ? <Button label={t('ct.report.takePhoto')} loading={loading} onPress={() => analyse('camera')} /> : null}
+            <Button kind={Platform.OS === 'web' ? 'primary' : 'ghost'} label={t('common.choosePhoto')} loading={loading} onPress={() => analyse('library')} />
           </Row>
           <ThemedText type="small" themeColor="textSecondary">
-            {isPremium ? 'Analyses illimitées.' : `${left} analyse gratuite ce mois-ci.`} La photo sert uniquement à l’analyse et n’est pas conservée.
+            {isPremium ? t('common.unlimitedAnalyses') : tn('common.freeAnalysesLeft', left)} {t('common.photoPrivacy')}
           </ThemedText>
           {error ? <ThemedText>{error}</ThemedText> : null}
         </Card>
@@ -170,14 +169,12 @@ export default function ControleTechniqueScreen() {
       {report && worst ? (
         <>
           <Card>
-            <Verdict urgency={VERDICT[worst].urgency} title={VERDICT[worst].title} reason={report.summary} />
+            <Verdict urgency={VERDICT[worst].urgency} title={t(VERDICT[worst].title)} reason={report.summary} />
             <ThemedText type="smallBold">{report.deadline}</ThemedText>
-            <ThemedText type="small">
-              En faisant vous-même ce qui est faisable : {report.totalDiy} · Tout au garage : {report.totalGarage}
-            </ThemedText>
+            <ThemedText type="small">{t('ct.report.costs', { diy: report.totalDiy, garage: report.totalGarage })}</ThemedText>
           </Card>
           <Card>
-            <Heading>Défaut par défaut</Heading>
+            <Heading>{t('ct.report.byDefect')}</Heading>
             {report.defects.map((d, i) => {
               const guide = findGuide(d.guideId);
               return (
@@ -191,16 +188,16 @@ export default function ControleTechniqueScreen() {
                   </Row>
                   <ThemedText type="small">{d.explanation}</ThemedText>
                   <Row style={{ gap: Spacing.three }}>
-                    {d.diy ? <Tag label="Faisable soi-même" /> : null}
+                    {d.diy ? <Tag label={t('ct.report.diy')} /> : null}
                     <Dots value={d.difficulty} />
                   </Row>
                   <ThemedText type="small" themeColor="textSecondary">
-                    Pièces : {d.partsCost} · Garage : {d.garageCost}
+                    {t('common.partsGarage', { parts: d.partsCost, garage: d.garageCost })}
                   </ThemedText>
                   {d.partQuery ? (
                     <Row>
                       <ThemedText type="small" themeColor="textSecondary">
-                        Prix des pièces :
+                        {t('common.partPrices')}
                       </ThemedText>
                       {partLinks(d.partQuery, vehicle ?? {}).map((l) => (
                         <ExternalLink key={l.label} href={l.url}>
@@ -212,18 +209,18 @@ export default function ControleTechniqueScreen() {
                   {!d.diy ? (
                     <Row>
                       <ThemedText type="small" themeColor="textSecondary">
-                        Réparation pour un garage :
+                        {t('common.garageRepair')}
                       </ThemedText>
                       {garageLinks().map((l) => (
                         <ExternalLink key={l.label} href={l.url}>
-                          <ThemedText type="linkPrimary">Devis sur {l.label}</ThemedText>
+                          <ThemedText type="linkPrimary">{t('common.quoteOn', { site: l.label })}</ThemedText>
                         </ExternalLink>
                       ))}
                     </Row>
                   ) : null}
                   {guide ? (
                     <Row>
-                      <Button kind="ghost" label={`Guide : ${guide.title}`} onPress={() => router.push(`/guides/${guide.id}`)} />
+                      <Button kind="ghost" label={t('common.guide', { title: guide.title })} onPress={() => router.push(`/guides/${guide.id}`)} />
                     </Row>
                   ) : null}
                 </View>
@@ -231,7 +228,7 @@ export default function ControleTechniqueScreen() {
             })}
           </Card>
           <ThemedText type="small" themeColor="textSecondary">
-            Estimation indicative. Seul le centre de contrôle valide la réparation lors de la contre-visite : gardez les factures et les pièces remplacées.
+            {t('ct.report.disclaimer')}
           </ThemedText>
         </>
       ) : null}

@@ -8,32 +8,34 @@ import { PIDS } from '@/features/obd/elm327';
 import type { LiveReading } from '@/features/obd/obd-session';
 import type { ObdReader } from '@/features/obd/use-obd-reader';
 import { useTheme } from '@/hooks/use-theme';
+import { currentLocale, useT } from '@/i18n';
 
-/** Format français : virgule décimale, espace fine insécable pour les milliers, signe + si demandé. */
-export function formatLiveValue(reading: LiveReading): string {
+/** Format de la locale active (séparateurs décimal et des milliers), signe − typographique, + si demandé. */
+export function formatLiveValue(reading: LiveReading, locale: string = currentLocale()): string {
   if (reading.value === null) return '—';
   const def = PIDS[reading.pid];
   const decimals = def?.decimals ?? 0;
-  const fixed = Math.abs(reading.value).toFixed(decimals);
-  const [int, dec] = fixed.split('.');
-  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  const isZero = Number(fixed) === 0;
+  const rounded = Number(Math.abs(reading.value).toFixed(decimals));
+  const body = rounded.toLocaleString(locale, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const isZero = rounded === 0;
   const sign = reading.value < 0 && !isZero ? '−' : def?.signed && !isZero ? '+' : '';
-  return `${sign}${grouped}${dec ? `,${dec}` : ''}`;
+  return `${sign}${body}`;
 }
 
 function Tile({ reading }: { reading: LiveReading }) {
   const theme = useTheme();
+  const { t, locale } = useT();
   const warn = reading.status === 'warn';
   const ok = reading.status === 'ok';
   const valueColor = warn ? theme.warn : ok ? theme.ok : theme.text;
-  const value = formatLiveValue(reading);
+  const value = formatLiveValue(reading, locale);
   return (
     <View
       accessible
-      accessibilityLabel={`${reading.label} : ${reading.value === null ? 'non disponible' : `${value} ${reading.unit}`}${
-        warn ? `, hors plage normale. ${reading.hint ?? ''}` : ''
-      }`}
+      accessibilityLabel={`${t('live.a11y.value', {
+        label: reading.label,
+        value: reading.value === null ? t('live.a11y.unavailable') : `${value} ${reading.unit}`,
+      })}${warn ? t('live.a11y.outOfRange', { hint: reading.hint ?? '' }) : ''}`}
       style={[
         styles.tile,
         {
@@ -63,6 +65,7 @@ type Props = {
 };
 
 export function LiveData({ obd }: Props) {
+  const { t, tn } = useT();
   const running = obd.liveState === 'connecting' || obd.liveState === 'on';
   const busy = obd.status === 'searching' || obd.status === 'reading';
   const readings = obd.live ?? [];
@@ -70,21 +73,21 @@ export function LiveData({ obd }: Props) {
   return (
     <Card>
       <Row style={{ justifyContent: 'space-between' }}>
-        <Eyebrow>Données en direct</Eyebrow>
-        {obd.liveState === 'on' ? <Tag label="En direct" /> : null}
+        <Eyebrow>{t('live.title')}</Eyebrow>
+        {obd.liveState === 'on' ? <Tag label={t('live.on')} /> : null}
       </Row>
       <ThemedText type="small" themeColor="textSecondary">
-        Contact mis ou moteur tournant, suivez le régime, la température, la charge de la batterie et les corrections de richesse, actualisés chaque seconde.
+        {t('live.intro')}
       </ThemedText>
       <Row>
         {running ? (
-          <Button kind="ghost" label="Arrêter" onPress={obd.stopLive} loading={obd.liveState === 'connecting'} />
+          <Button kind="ghost" label={t('live.stop')} onPress={obd.stopLive} loading={obd.liveState === 'connecting'} />
         ) : (
-          <Button label="Afficher les données en direct" onPress={obd.startLive} disabled={busy} />
+          <Button label={t('live.start')} onPress={obd.startLive} disabled={busy} />
         )}
         {obd.liveState === 'on' && readings.length ? (
           <ThemedText type="small" themeColor={warnings ? 'warn' : 'textSecondary'}>
-            {warnings ? `${warnings} valeur${warnings > 1 ? 's' : ''} hors plage normale` : 'Toutes les valeurs sont dans la plage normale'}
+            {warnings ? tn('live.warnings', warnings) : t('live.allOk')}
           </ThemedText>
         ) : null}
       </Row>
