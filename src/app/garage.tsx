@@ -3,10 +3,13 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, Field, Heading, LockBox, Row, Screen, Title, Verdict } from '@/components/ui';
+import { KnownIssues } from '@/components/known-issues';
+import { Button, Card, Field, Heading, LockBox, Row, Screen, Tag, Title, Verdict } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
+import { Due, maintenanceDue } from '@/data/maintenance';
 import { useTheme } from '@/hooks/use-theme';
 import { vehicleLabel } from '@/lib/diagnosis';
+import { exportLog } from '@/lib/export-log';
 import { usePremium } from '@/lib/purchases';
 import { newId, useCurrentVehicle, useStore } from '@/lib/store';
 
@@ -21,12 +24,20 @@ export default function GarageScreen() {
 
   const log = state.log.filter((l) => l.vehicleId === current?.id).sort((a, b) => b.date.localeCompare(a.date));
 
-  const addEntry = () => {
-    if (!current || !operation.trim()) return;
+  const [exportMsg, setExportMsg] = useState('');
+  const due = current ? maintenanceDue(current, state.log) : [];
+
+  const record = (op: string, km: string, day: string) => {
+    if (!current) return;
     update((s) => ({
       ...s,
-      log: [...s.log, { id: newId(), vehicleId: current.id, date, mileage: mileage.replace(/\D/g, ''), operation: operation.trim() }],
+      log: [...s.log, { id: newId(), vehicleId: current.id, date: day, mileage: km.replace(/\D/g, ''), operation: op }],
     }));
+  };
+
+  const addEntry = () => {
+    if (!current || !operation.trim()) return;
+    record(operation.trim(), mileage, date);
     setOperation('');
     setMileage('');
   };
@@ -73,8 +84,36 @@ export default function GarageScreen() {
         ) : null}
       </Card>
 
+      {current ? <KnownIssues vehicle={current} /> : null}
+
+      {current ? (
+        <Card>
+          <Heading>Entretien à prévoir</Heading>
+          <ThemedText type="small" themeColor="textSecondary">
+            Calculé à partir du kilométrage et de votre carnet. Les intervalles sont des valeurs courantes : le carnet constructeur prime.
+          </ThemedText>
+          {due.map((d) => (
+            <DueRow
+              key={d.item.id}
+              due={d}
+              onDone={isPremium ? () => record(d.item.title, current.mileage, new Date().toISOString().slice(0, 10)) : undefined}
+            />
+          ))}
+        </Card>
+      ) : null}
+
       <Card>
-        <Heading>Carnet d’entretien</Heading>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <Heading>Carnet d’entretien</Heading>
+          {isPremium && current ? (
+            <Button
+              kind="ghost"
+              label="Exporter en PDF"
+              onPress={() => exportLog(current, state.log).catch(() => setExportMsg('Export impossible sur cet appareil.'))}
+            />
+          ) : null}
+        </Row>
+        {exportMsg ? <ThemedText type="small">{exportMsg}</ThemedText> : null}
         {!isPremium ? (
           <LockBox
             text="Suivez vos entretiens, gardez une trace pour la revente et recevez un rappel avant la prochaine vidange."
@@ -117,5 +156,56 @@ export default function GarageScreen() {
         )}
       </Card>
     </Screen>
+  );
+}
+
+const STATUS: Record<Due['status'], { label: string; color: 'stop' | 'warn' | 'ok' | 'textSecondary' }> = {
+  retard: { label: 'À faire', color: 'stop' },
+  bientot: { label: 'Bientôt', color: 'warn' },
+  ok: { label: 'À jour', color: 'ok' },
+  inconnu: { label: 'Non noté', color: 'textSecondary' },
+};
+
+function DueRow({ due, onDone }: { due: Due; onDone?: () => void }) {
+  const theme = useTheme();
+  const st = STATUS[due.status];
+  const interval = [
+    due.item.everyKm ? `tous les ${due.item.everyKm.toLocaleString('fr-FR')} km` : '',
+    due.item.everyMonths ? `${due.item.everyMonths % 12 === 0 ? `${due.item.everyMonths / 12} an${due.item.everyMonths > 12 ? 's' : ''}` : `${due.item.everyMonths} mois`}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ou ');
+  const next = [
+    due.nextKm ? `vers ${due.nextKm.toLocaleString('fr-FR')} km` : '',
+    due.nextDate ? `avant le ${new Date(due.nextDate).toLocaleDateString('fr-FR')}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ou ');
+  return (
+    <View style={{ gap: 2, borderTopWidth: 1, borderTopColor: theme.line, paddingTop: Spacing.two }}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <ThemedText type="smallBold" style={{ flexShrink: 1 }}>
+          {due.item.title}
+        </ThemedText>
+        <ThemedText type="smallBold" style={{ color: theme[st.color] }}>
+          {st.label}
+        </ThemedText>
+      </Row>
+      <ThemedText type="small" themeColor="textSecondary">
+        {[interval, next ? `Prochaine fois ${next}` : '', due.last ? `Dernière fois le ${new Date(due.last.date).toLocaleDateString('fr-FR')}` : '']
+          .filter(Boolean)
+          .join(' · ')}
+      </ThemedText>
+      {due.item.note ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          {due.item.note}
+        </ThemedText>
+      ) : null}
+      <Row>
+        {due.item.guideId ? <Button kind="ghost" label="Voir le guide" onPress={() => router.push(`/guides/${due.item.guideId}`)} /> : null}
+        {onDone && due.status !== 'ok' ? <Button kind="ghost" label="Fait aujourd’hui" onPress={onDone} /> : null}
+        {!onDone && due.status === 'retard' ? <Tag label="Rappel dans le carnet : Premium" /> : null}
+      </Row>
+    </View>
   );
 }

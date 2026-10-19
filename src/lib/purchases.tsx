@@ -10,6 +10,9 @@ import Purchases, { CustomerInfo, PurchasesPackage } from 'react-native-purchase
 import { useStore } from '@/lib/store';
 
 export const ENTITLEMENT = 'premium';
+/** Paquet RevenueCat du diagnostic à l'unité (produit consommable à 2,99 €). */
+export const CREDIT_PACKAGE = 'diag_unit';
+export const CREDIT_PRICE = '2,99 €';
 
 const API_KEY = Platform.select({
   ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,
@@ -22,7 +25,11 @@ export const DEMO_MODE = !API_KEY;
 type PremiumState = {
   isPremium: boolean;
   demo: boolean;
+  /** Abonnements proposés (mensuel, annuel). */
   packages: PurchasesPackage[];
+  /** Achète un diagnostic à l'unité ; renvoie true si le crédit est ajouté. */
+  buyCredit: () => Promise<boolean>;
+  creditPrice: string;
   purchase: (pkg: PurchasesPackage) => Promise<boolean>;
   restore: () => Promise<boolean>;
   setDemo: (on: boolean) => void;
@@ -69,18 +76,39 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
     return hasEntitlement(info);
   }, []);
 
+  const credit = packages.find((p) => p.identifier === CREDIT_PACKAGE);
+
+  const buyCredit = useCallback(async () => {
+    const add = () => update((s) => ({ ...s, credits: (s.credits ?? 0) + 1 }));
+    if (DEMO_MODE) {
+      add();
+      return true;
+    }
+    if (!credit) return false;
+    try {
+      await Purchases.purchasePackage(credit);
+      add();
+      return true;
+    } catch (e) {
+      if ((e as { userCancelled?: boolean }).userCancelled) return false;
+      throw e;
+    }
+  }, [credit, update]);
+
   const setDemo = useCallback((on: boolean) => update((s) => ({ ...s, demoPremium: on })), [update]);
 
   const value = useMemo<PremiumState>(
     () => ({
       isPremium: DEMO_MODE ? state.demoPremium : paid,
       demo: DEMO_MODE,
-      packages,
+      packages: packages.filter((p) => p.identifier !== CREDIT_PACKAGE),
+      buyCredit,
+      creditPrice: credit?.product.priceString ?? CREDIT_PRICE,
       purchase,
       restore,
       setDemo,
     }),
-    [state.demoPremium, paid, packages, purchase, restore, setDemo],
+    [state.demoPremium, paid, packages, buyCredit, credit, purchase, restore, setDemo],
   );
   return <PremiumContext.Provider value={value}>{children}</PremiumContext.Provider>;
 }

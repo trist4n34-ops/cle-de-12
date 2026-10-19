@@ -6,12 +6,25 @@ import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
 
+import { knownIssuesFor } from '@/data/known-issues';
 import { GUIDE_IDS } from '@/data/guides';
+import { CtReportSchema } from '@/lib/ct';
 import { DiagnosisRequest, DiagnosisSchema, isHighVoltage, vehicleLabel } from '@/lib/diagnosis';
 import { RepairPlanSchema } from '@/lib/repair-plan';
 import { QuoteReviewSchema } from '@/lib/quote';
 
-export const MODEL = process.env.CLAUDE_MODEL ?? 'claude-opus-5-5';
+/**
+ * Modèles par usage. Sonnet pour l'analyse (diagnostic, photos, devis, plans),
+ * Haiku pour le chat de suivi : environ deux fois moins cher qu'Opus partout.
+ * CLAUDE_MODEL force un même modèle pour l'analyse (par exemple claude-opus-5-5).
+ */
+export const MODELS = {
+  analysis: process.env.CLAUDE_MODEL_ANALYSIS ?? process.env.CLAUDE_MODEL ?? 'claude-sonnet-5-5',
+  chat: process.env.CLAUDE_MODEL_CHAT ?? 'claude-haiku-5-5',
+};
+
+/** Haiku ne prend pas le réglage d'effort : on ne l'envoie qu'aux autres modèles. */
+const effortFor = (model: string, effort: 'low' | 'medium' | 'high') => (model.includes('haiku') ? {} : { effort });
 
 /** En cas de refus d'un filtre de sécurité, l'API relance la demande sur un modèle de repli. */
 const FALLBACK: { betas: Anthropic.AnthropicBeta[]; fallbacks: 'default' } = {
@@ -37,6 +50,14 @@ function vehicleBlock(v: DiagnosisRequest['vehicle']) {
   return `Véhicule : ${vehicleLabel(v) || 'non précisé'} ; carburant : ${v.fuel}${v.plate ? ` ; immatriculation ${v.plate}` : ''}${v.vin ? ` ; VIN ${v.vin}` : ''}.${isHighVoltage(v.fuel) ? ' Véhicule à haute tension.' : ''}`;
 }
 
+function knownIssuesBlock(v: DiagnosisRequest['vehicle']) {
+  const issues = knownIssuesFor(v);
+  if (!issues.length) return '';
+  return `Pannes connues répertoriées pour ce véhicule (à retenir seulement si les symptômes concordent) :\n${issues
+    .map((k) => `- ${k.title} : ${k.signs}`)
+    .join('\n')}`;
+}
+
 function imageBlock(base64: string): Anthropic.Beta.BetaImageBlockParam {
   return { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 } };
 }
@@ -55,10 +76,10 @@ async function parse<T extends z.ZodType>(
 ): Promise<z.infer<T>> {
   const response = await anthropic().beta.messages.parse({
     ...FALLBACK,
-    model: MODEL,
+    model: MODELS.analysis,
     max_tokens: 16000,
     system: PERSONA,
-    output_config: { effort, format: betaZodOutputFormat(schema) },
+    output_config: { ...effortFor(MODELS.analysis, effort), format: betaZodOutputFormat(schema) },
     messages: [{ role: 'user', content }],
   });
   if (response.stop_reason === 'refusal') throw new ClaudeError("L'IA n'a pas pu traiter cette demande. Reformulez les symptômes.", 422);
@@ -72,6 +93,7 @@ Symptômes décrits : ${req.symptoms || 'aucun'}
 Symptômes cochés : ${req.symptomTags.join(', ') || 'aucun'}
 Codes OBD2 : ${req.codes.join(', ') || 'aucun'}
 ${req.photo ? "Une photo prise par l'utilisateur est jointe : dis dans le résumé ce que tu y vois d'utile." : ''}
+${knownIssuesBlock(req.vehicle)}
 Fais un diagnostic différentiel réaliste pour ce modèle, ce moteur et ce kilométrage, en tenant compte des pannes connues de ce moteur.
 - 3 à 4 causes, probabilités entières qui totalisent 100, difficulty de 1 (débutant) à 5 (garage conseillé).
 - partsCost et garageCost en fourchettes ("35–70 €").
@@ -109,6 +131,30 @@ Lis chaque ligne (pièce ou main-d'œuvre), compare le prix aux prix habituels d
   );
 }
 
+export function reviewCtReport(input: { vehicle: DiagnosisRequest['vehicle']; photo: string }) {
+  return parse(
+    CtReportSchema,
+    [
+      imageBlock(input.photo),
+      {
+        type: 'text',
+        text: `${vehicleBlock(input.vehicle)}
+La photo est un procès-verbal de contrôle technique français (ou de contre-visite).
+Relève chaque défaillance imprimée : code tel qu'il est écrit ("5.1.1.b.2"), ou "" si tu ne le lis pas ; libellé ; niveau "mineure", "majeure" ou "critique" tel qu'indiqué sur le PV. N'invente aucune défaillance absente du PV.
+Pour chacune :
+- explanation : ce que cela veut dire, en français simple, et le risque.
+- diy : true si un amateur peut la corriger avec un outillage courant (ampoule, balai d'essuie-glace, niveau, plaque...), false sinon ; difficulty de 1 (débutant) à 5 (garage conseillé).
+- partsCost et garageCost en fourchettes ("35–70 €") pour ce véhicule.
+- partQuery : la pièce à chercher chez un vendeur en ligne, ou "" si aucune pièce.
+- guideId : l'un de ${GUIDE_IDS.join(', ')}, ou null.
+deadline : rappelle les règles en partant de la date du contrôle si tu la lis. Défaillance majeure : contre-visite dans les 2 mois. Défaillance critique : le véhicule ne peut circuler que jusqu'à minuit le jour du contrôle, puis contre-visite dans les 2 mois. Mineures seules : pas de contre-visite.
+totalDiy : total des pièces en faisant soi-même ce qui est faisable (le reste au garage) ; totalGarage : total si tout est fait au garage.`,
+      },
+    ],
+    'medium',
+  );
+}
+
 export async function chat(input: {
   vehicle: DiagnosisRequest['vehicle'];
   context: string;
@@ -116,13 +162,13 @@ export async function chat(input: {
 }): Promise<string> {
   const response = await anthropic().beta.messages.create({
     ...FALLBACK,
-    model: MODEL,
+    model: MODELS.chat,
     max_tokens: 4000,
     system: `${PERSONA}
 Tu accompagnes l'utilisateur pendant une réparation. Réponds en 6 phrases maximum, concret, sécurité d'abord.
 ${vehicleBlock(input.vehicle)}
 Diagnostic en cours : ${input.context}`,
-    output_config: { effort: 'low' },
+    output_config: effortFor(MODELS.chat, 'low'),
     messages: input.messages.slice(-12),
   });
   if (response.stop_reason === 'refusal') throw new ClaudeError("L'IA n'a pas pu répondre à cette question.", 422);

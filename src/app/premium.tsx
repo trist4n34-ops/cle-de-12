@@ -7,7 +7,7 @@ import { Button, Card, Eyebrow, Row, Screen, Tag, Title } from '@/components/ui'
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { usePremium } from '@/lib/purchases';
-import { FREE_DIAGNOSES_PER_MONTH, FREE_QUOTES_PER_MONTH } from '@/lib/store';
+import { FREE_CT_REPORTS_PER_MONTH, FREE_DIAGNOSES_PER_MONTH, FREE_QUOTES_PER_MONTH, useStore } from '@/lib/store';
 
 type Feature = [label: string, free: boolean | string, premium: boolean | string];
 
@@ -15,21 +15,27 @@ const FEATURES: Feature[] = [
   ['Lecture des codes par dongle OBD2 Bluetooth', true, true],
   ['Verdict de sécurité : rouler, prudence ou arrêt', true, true],
   ['Causes probables avec coûts pièces et garage', true, true],
+  ['Catalogue de toutes les marques et modèles', true, true],
+  ['Pannes connues de votre moteur', true, true],
+  ['Identifier un bruit, plan d’entretien, check-list du contrôle technique', true, true],
   ['Diagnostics IA par mois', String(FREE_DIAGNOSES_PER_MONTH), 'Illimités'],
   ['Analyse de devis de garage', `${FREE_QUOTES_PER_MONTH} par mois`, 'Illimitée'],
+  ['Analyse du procès-verbal de contrôle technique', `${FREE_CT_REPORTS_PER_MONTH} par mois`, 'Illimitée'],
+  ['Données moteur en direct (régime, température, batterie)', false, true],
   ['Guides pas à pas essentiels', true, true],
   ['Analyse de photo (voyant, fuite, pièce usée)', false, true],
   ['Plan de réparation sur mesure pour votre modèle', false, true],
   ['Questions de suivi pendant la réparation', false, true],
   ['Guides avancés avec couples de serrage', false, true],
-  ["Plusieurs véhicules et carnet d'entretien", false, true],
+  ['Plusieurs véhicules, carnet d’entretien et export PDF', false, true],
 ];
 
 const DEMO_PRICES = { monthly: '6,99 €/mois', annual: '49 €/an, soit 4,08 €/mois' };
 
 export default function PremiumScreen() {
   const theme = useTheme();
-  const { isPremium, demo, packages, purchase, restore, setDemo } = usePremium();
+  const { isPremium, demo, packages, purchase, restore, setDemo, buyCredit, creditPrice } = usePremium();
+  const { state } = useStore();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -115,6 +121,35 @@ export default function PremiumScreen() {
           {message ? <ThemedText type="small">{message}</ThemedText> : null}
         </Card>
       </View>
+      {!isPremium ? (
+        <Card>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, minWidth: 200, gap: Spacing.one }}>
+              <Eyebrow>Une seule panne</Eyebrow>
+              <ThemedText type="smallBold">{`Un diagnostic IA complet pour ${creditPrice}, sans abonnement`}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                Pour ceux qui ne réparent pas eux-mêmes : verdict, causes, coûts et liens garage.
+                {state.credits ? ` Vous avez ${state.credits} diagnostic${state.credits > 1 ? 's' : ''} d’avance.` : ''}
+              </ThemedText>
+            </View>
+            <Button
+              kind="ghost"
+              label="Acheter un diagnostic"
+              disabled={busy}
+              onPress={async () => {
+                setBusy(true);
+                try {
+                  setMessage((await buyCredit()) ? 'Diagnostic ajouté.' : 'Achat annulé.');
+                } catch {
+                  setMessage('Le paiement n’a pas abouti. Aucun montant n’a été débité.');
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          </Row>
+        </Card>
+      ) : null}
       {demo ? (
         <ThemedText type="small" themeColor="textSecondary">
           Mode démo : aucun paiement n’est configuré sur cette version, Premium se débloque gratuitement pour le tester.
