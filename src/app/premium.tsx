@@ -3,10 +3,12 @@ import { View } from 'react-native';
 import { PurchasesPackage } from 'react-native-purchases';
 
 import { ThemedText } from '@/components/themed-text';
+import { PlanPicker } from '@/components/plan-picker';
 import { Button, Card, Eyebrow, Row, Screen, Tag, Title } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { type TKey, useT } from '@/i18n';
+import { annualSavings, DEMO_PRICES, plansFrom } from '@/lib/plans';
 import { usePremium } from '@/lib/purchases';
 import { FREE_CT_REPORTS_PER_MONTH, FREE_DIAGNOSES_PER_MONTH, FREE_QUOTES_PER_MONTH, useStore } from '@/lib/store';
 
@@ -35,7 +37,7 @@ const FEATURES: Feature[] = [
 
 export default function PremiumScreen() {
   const theme = useTheme();
-  const { t, tn } = useT();
+  const { t, tn, locale } = useT();
   const { isPremium, demo, packages, purchase, restore, setDemo, buyCredit, creditPrice } = usePremium();
   const { state } = useStore();
   const [busy, setBusy] = useState(false);
@@ -63,6 +65,19 @@ export default function PremiumScreen() {
       setBusy(false);
     }
   };
+
+  // Mode démo : les prix de référence ; sinon les paquets mensuel et annuel de RevenueCat.
+  const fmt = (n: number) => n.toLocaleString(locale, { style: 'currency', currency: 'EUR' });
+  const offer = demo
+    ? {
+        plans: [
+          { id: 'monthly' as const, price: fmt(DEMO_PRICES.monthly) },
+          { id: 'annual' as const, price: fmt(DEMO_PRICES.annual), perMonth: fmt(Math.round((DEMO_PRICES.annual / 12) * 100) / 100) },
+        ],
+        savings: annualSavings(DEMO_PRICES.monthly, DEMO_PRICES.annual),
+      }
+    : plansFrom(packages);
+  const otherPackages = demo ? [] : packages.filter((p) => !offer.plans.some((plan) => plan.pkg === p));
 
   const valueText = (v: Value) =>
     typeof v === 'string'
@@ -100,32 +115,27 @@ export default function PremiumScreen() {
             <Eyebrow>Premium</Eyebrow>
             <Tag label={t('premium.trial')} premium />
           </Row>
-          {demo ? (
-            <>
-              <ThemedText style={{ fontSize: 36, fontWeight: 800 }}>
-                {t('premium.price.annual')}
-                <ThemedText themeColor="textSecondary">{t('premium.price.perYear')}</ThemedText>
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {t('premium.price.orMonthly')}
-              </ThemedText>
-            </>
-          ) : null}
           {column(true)}
           {isPremium ? (
             <Tag label={t('premium.active')} premium />
-          ) : demo ? (
-            <Button kind="signal" label={t('premium.tryDemo')} onPress={() => setDemo(true)} />
           ) : (
-            packages.map((pkg) => (
-              <Button
-                key={pkg.identifier}
-                kind="signal"
-                loading={busy}
-                label={`${pkg.product.title || 'Premium'} · ${pkg.product.priceString}`}
-                onPress={() => buy(pkg)}
+            <>
+              <PlanPicker
+                plans={offer.plans}
+                savings={offer.savings}
+                busy={busy}
+                onChoose={(plan) => (plan.pkg ? buy(plan.pkg) : setDemo(true))}
               />
-            ))
+              {otherPackages.map((pkg) => (
+                <Button
+                  key={pkg.identifier}
+                  kind="ghost"
+                  loading={busy}
+                  label={`${pkg.product.title || 'Premium'} · ${pkg.product.priceString}`}
+                  onPress={() => buy(pkg)}
+                />
+              ))}
+            </>
           )}
           {!demo ? <Button kind="ghost" label={t('premium.restore')} onPress={doRestore} disabled={busy} /> : null}
           {demo && isPremium ? <Button kind="ghost" label={t('premium.backToFree')} onPress={() => setDemo(false)} /> : null}

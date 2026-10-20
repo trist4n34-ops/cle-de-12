@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 import { FUELS } from '@/lib/diagnosis';
+import { FELT_DIFFICULTY, MAX_FEEDBACK_COMMENT, OUTCOMES } from '@/lib/guide-feedback';
 
 /** Corps JSON maximal accepté (photo base64 comprise). */
 export const MAX_BODY_BYTES = 6 * 1024 * 1024;
@@ -89,6 +90,15 @@ export const QuoteInput = z.object({
   language: LanguageInput,
   photo: PhotoInput,
   context: z.string().max(4000).optional(),
+});
+
+export const GuideFeedbackInput = z.object({
+  guideId: z.string().regex(/^[a-z0-9-]{1,60}$/),
+  rating: z.number().int().min(1).max(5),
+  outcome: z.enum(OUTCOMES),
+  difficulty: z.enum(FELT_DIFFICULTY),
+  comment: z.string().max(MAX_FEEDBACK_COMMENT).optional(),
+  language: LanguageInput,
 });
 
 export const PlatePhotoInput = z.object({ photo: PhotoInput });

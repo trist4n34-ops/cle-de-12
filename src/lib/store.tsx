@@ -7,6 +7,7 @@ import { randomUUID } from 'expo-crypto';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DiagnosisRecord, Vehicle } from '@/lib/diagnosis';
+import type { GuideFeedback } from '@/lib/guide-feedback';
 
 // Définis dans un module sans dépendance, partagé avec le serveur qui les applique.
 export { FREE_CT_REPORTS_PER_MONTH, FREE_DIAGNOSES_PER_MONTH, FREE_QUOTES_PER_MONTH } from '@/lib/quotas';
@@ -34,6 +35,8 @@ export type AppState = {
   demoPremium: boolean;
   /** Langue choisie par l'utilisateur (fr, en…). Absente : langue de l'appareil. */
   language?: string;
+  /** Avis laissés sur les guides, par identifiant de guide. */
+  guideFeedback?: Record<string, GuideFeedback>;
 };
 
 const KEY = 'cle12:state:v1';

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { PlanView } from '@/components/diagnosis-view';
+import { GuideFeedbackCard } from '@/components/guide-feedback';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Dots, Eyebrow, Heading, LockBox, Row, Screen, Tag, Title } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -163,6 +164,7 @@ export default function GuideScreen() {
           )}
         </Card>
       ) : null}
+      {!locked ? <GuideFeedbackCard guideId={guide.id} allDone={steps.length > 0 && steps.every((_, i) => progress[i])} /> : null}
     </Screen>
   );
 }

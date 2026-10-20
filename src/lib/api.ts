@@ -10,6 +10,7 @@
 import { currentLanguage } from '@/i18n/core';
 import type { CtReport } from '@/lib/ct';
 import type { Diagnosis, DiagnosisRequest, Vehicle } from '@/lib/diagnosis';
+import { type GuideFeedback, type GuideStats, MAX_FEEDBACK_COMMENT } from '@/lib/guide-feedback';
 import type { QuoteReview } from '@/lib/quote';
 import type { RepairPlan } from '@/lib/repair-plan';
 
@@ -117,6 +118,15 @@ export const api = {
   ct: (vehicle: VehicleInput, photo: string) => post<CtReport>('/api/ct', { vehicle, photo }),
   plate: (plate: string) =>
     call<Omit<Vehicle, 'id' | 'mileage'>>(`/api/vehicle?plate=${encodeURIComponent(plate)}`),
+  guideStats: (guideId: string) => call<GuideStats>(`/api/guide-feedback?guide=${encodeURIComponent(guideId)}`),
+  guideFeedback: (guideId: string, f: GuideFeedback) =>
+    post<GuideStats>('/api/guide-feedback', {
+      guideId,
+      rating: f.rating,
+      outcome: f.outcome,
+      difficulty: f.difficulty,
+      comment: f.comment?.slice(0, MAX_FEEDBACK_COMMENT) || undefined,
+    }),
   platePhoto: (photo: string) =>
     post<{ plate: string; confidence: 'haute' | 'moyenne' | 'basse'; vehicle: Omit<Vehicle, 'id' | 'mileage'> | null }>(
       '/api/plate-photo',

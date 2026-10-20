@@ -101,6 +101,7 @@ function GuideCard({ guide: g }: { guide: Guide }) {
   const { isPremium } = usePremium();
   const locked = g.premium && !isPremium;
   const done = (state.progress[g.id] ?? []).filter(Boolean).length;
+  const myRating = state.guideFeedback?.[g.id]?.rating;
   return (
     <Pressable
       accessibilityRole="button"
@@ -123,6 +124,7 @@ function GuideCard({ guide: g }: { guide: Guide }) {
       <ThemedText type="small" themeColor="textSecondary">
         {formatMinutes(g.minutes)} · {tn('guides.steps', g.steps.length)}
         {done ? ` · ${t('guides.progress', { done, total: g.steps.length })}` : ''}
+        {myRating ? ` · ${t('feedback.mine', { n: myRating })}` : ''}
       </ThemedText>
     </Pressable>
   );
