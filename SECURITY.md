@@ -71,7 +71,7 @@ Set these as EAS Hosting environment variables (`npx eas-cli@latest env:create`)
 
 ## Known follow-ups
 
-- Two high advisories have no fixed release as of October 2026 and are allowlisted in `scripts/audit.js`. Both come in through `expo` build tooling (Metro and the Expo CLI), not through code that runs in the app or on the server: `braces` <= 3.0.3 ([GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)) and `node-forge` <= 1.4.0 ([GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv)). The script reports an entry once it is no longer needed, so remove it when the fixes ship.
+- `node-forge` (Expo CLI code signing) is pinned to ^1.4.3 through `overrides` in `package.json`, which fixes its November 2026 advisories. One high advisory has no fixed release in its major version and is allowlisted in `scripts/audit.js`: `zod` 3.25 ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)), pulled in only by the Expo CLI build tool. The server validates requests with zod 4.6.7, which is patched. The script reports an entry once it is no longer needed, so remove it when the fix ships.
 - Consumable verification counts all `non_subscriptions` entries for the credit product, including sandbox purchases. Refunded transactions depend on RevenueCat removing them. Revisit this when accounts arrive.
 - Add token renewal (short-lived access tokens) so that `SESSION_SECRET` can be rotated without keeping old secrets indefinitely.
 - Move the session token to `expo-secure-store` (Keychain and Keystore) instead of AsyncStorage.

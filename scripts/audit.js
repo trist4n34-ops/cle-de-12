@@ -10,8 +10,8 @@ const { execSync } = require('node:child_process');
 // Failles sans version corrigée, présentes seulement dans l'outillage de build d'Expo
 // (Metro, Expo CLI) : ce code ne tourne ni dans l'app ni sur le serveur.
 const ALLOWED = {
-  'GHSA-vfj7-8cjw-p6xm': 'braces, via micromatch dans metro-file-map (build)',
-  'GHSA-86w9-cpqp-85rv': 'node-forge, via @expo/code-signing-certificates (Expo CLI)',
+  // zod 3.25 n'a pas de correctif ; seul @expo/cli l'utilise. Le serveur valide avec zod 4.6.7, corrigé.
+  'GHSA-mrhx-c7xc-m3w5': 'zod 3, via @expo/cli (build)',
 };
 
 let out;

@@ -61,5 +61,8 @@
   "private": true,
   "jest": {
     "preset": "jest-expo"
+  },
+  "overrides": {
+    "node-forge": "^1.4.3"
   }
 }
