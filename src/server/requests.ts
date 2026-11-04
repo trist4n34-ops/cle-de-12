@@ -109,8 +109,8 @@ export const CtInput = z.object({
   photo: PhotoInput,
 });
 
-const invalid = () => Response.json({ error: 'Requête invalide.' }, { status: 400 });
-const tooLarge = () => Response.json({ error: 'Requête trop volumineuse.' }, { status: 413 });
+const invalid = () => Response.json({ error: 'Requête invalide.', code: 'invalid_request' }, { status: 400 });
+const tooLarge = () => Response.json({ error: 'Requête trop volumineuse.', code: 'too_large' }, { status: 413 });
 
 /** Lit le corps en s'arrêtant dès qu'il dépasse `max` octets ; null s'il est trop gros. */
 export async function readBodyText(request: Request, max = MAX_BODY_BYTES): Promise<string | null> {

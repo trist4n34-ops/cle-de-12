@@ -44,3 +44,25 @@ export async function readStats(store: UsageStore, guideId: string): Promise<Gui
   const [count, sum, fixed] = await Promise.all([store.get(k.count), store.get(k.sum), store.get(k.fixed)]);
   return guideStats(count, sum, fixed);
 }
+
+/**
+ * Efface les avis d'un utilisateur (suppression des données) : chaque avis est
+ * retiré des agrégats auxquels il a contribué, puis supprimé. Renvoie le
+ * nombre d'avis effacés.
+ */
+export async function deleteUserFeedback(store: UsageStore, userId: string, guideIds: readonly string[]): Promise<number> {
+  const mine = guideIds.map((guideId) => `fb:u:${userId}:${guideId}`);
+  const codes = await store.getMany(mine);
+  let removed = 0;
+  for (const [i, code] of codes.entries()) {
+    if (!code) continue;
+    const old = decode(code);
+    const k = keys(guideIds[i]);
+    await store.incr(k.count, 0, -1);
+    await store.incr(k.sum, 0, -old.rating);
+    if (old.outcome === 'fixed') await store.incr(k.fixed, 0, -1);
+    removed++;
+  }
+  await store.del(mine.filter((_, i) => codes[i]));
+  return removed;
+}

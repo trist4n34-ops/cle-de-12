@@ -2,15 +2,17 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
 
+import { ApiErrorNotice } from '@/components/api-error-notice';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Heading, LockBox, Row, Screen, Tag, Title, Verdict } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
-import { api, ApiError, stripId } from '@/lib/api';
+import { api, stripId } from '@/lib/api';
+import { latestForVehicle } from '@/lib/diagnosis';
 import { pickPhoto } from '@/lib/photo';
 import { usePremium } from '@/lib/purchases';
-import { QuoteReview } from '@/lib/quote';
+import { MAX_SAVED_ANALYSES, putSaved, removeSaved } from '@/lib/saved-results';
 import { FREE_QUOTES_PER_MONTH, usage, useCurrentVehicle, useStore } from '@/lib/store';
 
 const VERDICT = {
@@ -28,12 +30,14 @@ const LINE_LABEL = {
 
 export default function QuoteScreen() {
   const theme = useTheme();
-  const { t, tn } = useT();
+  const { t, tn, date } = useT();
   const { state, update } = useStore();
   const { isPremium } = usePremium();
   const vehicle = useCurrentVehicle();
-  const [review, setReview] = useState<QuoteReview | null>(null);
-  const [error, setError] = useState('');
+  // Dernière analyse du véhicule, gardée sur l'appareil.
+  const saved = vehicle ? state.quoteReviews?.[vehicle.id] : undefined;
+  const review = saved?.value ?? null;
+  const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
 
   const left = Math.max(0, FREE_QUOTES_PER_MONTH - usage(state).quotes);
@@ -44,13 +48,17 @@ export default function QuoteScreen() {
     const photo = await pickPhoto(source);
     if (!photo) return;
     setLoading(true);
-    setError('');
+    setError(null);
     try {
-      const last = state.history[0];
-      setReview(await api.quote(stripId(vehicle), photo, last?.result.summary));
-      if (!isPremium) update((s) => ({ ...s, usage: { ...s.usage, quotes: s.usage.quotes + 1 } }));
+      const last = latestForVehicle(state.history, vehicle.id, state.vehicles.length);
+      const next = await api.quote(stripId(vehicle), photo, last?.result.summary);
+      update((s) => ({
+        ...s,
+        quoteReviews: putSaved(s.quoteReviews, vehicle.id, next, MAX_SAVED_ANALYSES),
+        usage: isPremium ? s.usage : { ...s.usage, quotes: s.usage.quotes + 1 },
+      }));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t('common.analysisFailed'));
+      setError(e);
     } finally {
       setLoading(false);
     }
@@ -72,12 +80,22 @@ export default function QuoteScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             {isPremium ? t('common.unlimitedAnalyses') : tn('common.freeAnalysesLeft', left)} {t('common.photoPrivacy')}
           </ThemedText>
-          {error ? <ThemedText>{error}</ThemedText> : null}
+          {error ? <ApiErrorNotice error={error} fallback={t('common.analysisFailed')} /> : null}
         </Card>
       )}
 
-      {review ? (
+      {review && saved && vehicle ? (
         <>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('common.savedOn', { date: date(saved.at) })}
+            </ThemedText>
+            <Button
+              kind="ghost"
+              label={t('common.clearResult')}
+              onPress={() => update((s) => ({ ...s, quoteReviews: removeSaved(s.quoteReviews, vehicle.id) }))}
+            />
+          </Row>
           <Card>
             <Verdict urgency={VERDICT[review.verdict].urgency} title={t(VERDICT[review.verdict].title)} reason={review.summary} />
             <ThemedText type="smallBold">{t('quote.total', { total: review.total })}</ThemedText>

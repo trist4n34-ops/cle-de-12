@@ -86,7 +86,11 @@ function imageBlock(base64: string): Anthropic.Beta.BetaImageBlockParam {
 
 /** Message d'erreur affichable si Claude refuse, ou si la réponse ne respecte pas le format. */
 export class ClaudeError extends Error {
-  constructor(message: string, readonly status = 502) {
+  constructor(
+    message: string,
+    readonly status = 502,
+    readonly code: 'ai_refused' | 'ai_incomplete' = status === 422 ? 'ai_refused' : 'ai_incomplete',
+  ) {
     super(message);
   }
 }

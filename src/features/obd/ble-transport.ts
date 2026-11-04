@@ -5,14 +5,16 @@
  *
  * Nécessite un build de développement (module natif), pas Expo Go.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BleManager, Characteristic, Device, State, Subscription } from 'react-native-ble-plx';
 import { PermissionsAndroid, Platform } from 'react-native';
 
+import { looksLikeDongle, pickUartPair } from './ble-uart';
 import type { ObdTransport } from './obd-session';
 
-/** Services UART courants des dongles BLE OBD2. */
-const KNOWN_SERVICES = ['fff0', 'ffe0', '18f0', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
-const NAME_HINT = /obd|elm|vgate|veepeak|icar|konnwei|v-link|vlink|ios-vlink|carly|scan/i;
+/** Dernier dongle connecté : on le rappelle directement avant de relancer un scan. */
+const LAST_DONGLE_KEY = 'cle12:obd:last-dongle';
+const RECONNECT_TIMEOUT_MS = 5000;
 
 let manager: BleManager | null = null;
 function getManager() {
@@ -73,9 +75,7 @@ export async function findDongle(timeoutMs = 12000): Promise<Device> {
         reject(new BleUnavailableError(error.message));
         return;
       }
-      const services = device?.serviceUUIDs?.map((u) => u.toLowerCase()) ?? [];
-      const known = services.some((u) => KNOWN_SERVICES.some((k) => u.includes(k)));
-      if (device && (known || NAME_HINT.test(device.name ?? device.localName ?? ''))) {
+      if (device && looksLikeDongle(device.serviceUUIDs, device.name ?? device.localName)) {
         clearTimeout(timer);
         m.stopDeviceScan();
         resolve(device);
@@ -84,22 +84,41 @@ export async function findDongle(timeoutMs = 12000): Promise<Device> {
   });
 }
 
+/**
+ * Liaison avec le dongle : d'abord le dernier dongle utilisé (sans scan), puis
+ * un scan si celui-ci ne répond pas. Le dongle qui fonctionne est mémorisé.
+ */
+export async function openDongle(): Promise<ObdTransport> {
+  const m = getManager();
+  if (!(await requestBlePermissions())) throw new BleUnavailableError('Autorisez le Bluetooth pour lire les codes.');
+  await waitPoweredOn(m);
+  const lastId = await AsyncStorage.getItem(LAST_DONGLE_KEY).catch(() => null);
+  if (lastId) {
+    try {
+      const device = await m.connectToDevice(lastId, { timeout: RECONNECT_TIMEOUT_MS });
+      return await connectBle(device);
+    } catch {
+      await m.cancelDeviceConnection(lastId).catch(() => undefined);
+    }
+  }
+  return connectBle(await findDongle());
+}
+
 /** Ouvre une liaison texte avec le dongle : écriture des commandes, lecture des notifications. */
 export async function connectBle(device: Device): Promise<ObdTransport> {
-  const connected = await (await device.connect()).discoverAllServicesAndCharacteristics();
-  let writer: Characteristic | undefined;
-  let reader: Characteristic | undefined;
-  for (const service of await connected.services()) {
-    for (const ch of await service.characteristics()) {
-      if (!writer && (ch.isWritableWithResponse || ch.isWritableWithoutResponse)) writer = ch;
-      if (!reader && (ch.isNotifiable || ch.isIndicatable)) reader = ch;
-    }
-    if (writer && reader) break;
-  }
-  if (!writer || !reader) {
+  // Un dongle rappelé par `openDongle` est déjà connecté : le reconnecter échouerait.
+  const linked = (await device.isConnected()) ? device : await device.connect();
+  const connected = await linked.discoverAllServicesAndCharacteristics();
+  const services = await Promise.all(
+    (await connected.services()).map(async (s) => ({ uuid: s.uuid, characteristics: await s.characteristics() })),
+  );
+  const pair = pickUartPair<Characteristic>(services);
+  if (!pair) {
     await connected.cancelConnection();
     throw new BleUnavailableError("Ce dongle n'expose pas de liaison série Bluetooth LE.");
   }
+  const { writer, reader } = pair;
+  AsyncStorage.setItem(LAST_DONGLE_KEY, connected.id).catch(() => undefined);
 
   let buffer = '';
   let waiting: ((text: string) => void) | null = null;

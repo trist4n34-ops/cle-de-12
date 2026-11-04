@@ -82,7 +82,9 @@ npx expo export -p web
 npx eas-cli@latest deploy
 ```
 
-Puis renseignez l'URL obtenue dans `app.json` (`plugins` → `expo-router` → `origin`) pour que l'app mobile appelle ce serveur.
+Puis renseignez l'URL obtenue dans la variable `API_ORIGIN` de l'environnement EAS du profil `production`, pour que l'app mobile appelle ce serveur (`app.config.js` la transmet à expo-router comme `origin`). Sans elle, le build de production échoue.
+
+Sans clés RevenueCat, le Premium « démo » gratuit n'existe qu'en développement ou avec `EXPO_PUBLIC_DEMO=1` (utilisé pour la démo web) : un build de production ne débloque jamais Premium gratuitement.
 
 ## Sécurité
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { BleUnavailableError, connectBle, findDongle } from './ble-transport';
+import { BleUnavailableError, openDongle } from './ble-transport';
 import { ElmError, LIVE_ORDER } from './elm327';
 import { clearCodes, initialize, LiveReading, ObdScan, ObdTransport, readAll, readLive, readSupportedPids } from './obd-session';
 
@@ -68,7 +68,7 @@ export function useObdReader() {
       try {
         if (previous) await previous.done;
         if (session.stopped) return;
-        transport = await connectBle(await findDongle());
+        transport = await openDongle();
         if (session.stopped) return;
         setLiveMessage('Connexion au véhicule…');
         await initialize(transport);
@@ -120,7 +120,7 @@ export function useObdReader() {
       setStatus('searching');
       setMessage('Recherche du dongle…');
       try {
-        const transport = await connectBle(await findDongle());
+        const transport = await openDongle();
         try {
           setStatus('reading');
           if (action === 'clear') {

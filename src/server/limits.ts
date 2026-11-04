@@ -76,7 +76,9 @@ export const RATE_LIMITS: Record<RateScope, { windowSeconds: number; user: numbe
   plate: { windowSeconds: 600, user: 10, ip: 30 },
   feedback: { windowSeconds: 600, user: 30, ip: 120 },
   // Chaque session neuve a droit au quota gratuit : la création est limitée par IP.
-  session: { windowSeconds: 3600, user: 0, ip: 10 },
+  // Les opérateurs mobiles partagent une IP entre beaucoup d'abonnés (CGNAT) :
+  // une limite trop basse bloquerait de vraies premières installations.
+  session: { windowSeconds: 3600, user: 0, ip: 30 },
 };
 
 /**

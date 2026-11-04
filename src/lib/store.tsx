@@ -6,8 +6,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { CtReport } from '@/lib/ct';
 import type { DiagnosisRecord, Vehicle } from '@/lib/diagnosis';
 import type { GuideFeedback } from '@/lib/guide-feedback';
+import type { QuoteReview } from '@/lib/quote';
+import type { RepairPlan } from '@/lib/repair-plan';
+import type { SavedMap } from '@/lib/saved-results';
 
 // Définis dans un module sans dépendance, partagé avec le serveur qui les applique.
 export { FREE_CT_REPORTS_PER_MONTH, FREE_DIAGNOSES_PER_MONTH, FREE_QUOTES_PER_MONTH } from '@/lib/quotas';
@@ -37,12 +41,19 @@ export type AppState = {
   language?: string;
   /** Avis laissés sur les guides, par identifiant de guide. */
   guideFeedback?: Record<string, GuideFeedback>;
+  /** Dernière analyse de devis par véhicule (bornée : MAX_SAVED_ANALYSES). */
+  quoteReviews?: SavedMap<QuoteReview>;
+  /** Dernière analyse de procès-verbal par véhicule (bornée : MAX_SAVED_ANALYSES). */
+  ctReports?: SavedMap<CtReport>;
+  /** Plans de réparation, par véhicule et réparation (planKey ; bornés : MAX_SAVED_PLANS). */
+  repairPlans?: SavedMap<RepairPlan>;
 };
 
 const KEY = 'cle12:state:v1';
 const month = () => new Date().toISOString().slice(0, 7);
 
-function initialState(): AppState {
+/** État d'une installation neuve (aussi utilisé par « Supprimer mes données »). */
+export function freshState(): AppState {
   return {
     userId: randomUUID(),
     vehicles: [],
@@ -65,7 +76,7 @@ type Store = {
 const StoreContext = createContext<Store | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AppState>(initialState);
+  const [state, setState] = useState<AppState>(freshState);
   const [ready, setReady] = useState(false);
   const loaded = useRef(false);
 

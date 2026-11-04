@@ -20,7 +20,13 @@ const API_KEY = Platform.select({
   web: process.env.EXPO_PUBLIC_REVENUECAT_WEB_KEY,
 });
 
-export const DEMO_MODE = !API_KEY;
+/**
+ * Sans clé RevenueCat : mode démo (Premium gratuit sur l'appareil) en
+ * développement, ou si EXPO_PUBLIC_DEMO=1 (démo web). Un build de production
+ * sans clé ne propose jamais Premium gratuit : les achats sont indisponibles.
+ */
+const DEMO_ALLOWED = __DEV__ || process.env.EXPO_PUBLIC_DEMO === '1';
+export const DEMO_MODE = !API_KEY && DEMO_ALLOWED;
 
 type PremiumState = {
   isPremium: boolean;
@@ -106,7 +112,8 @@ export function PremiumProvider({ children }: { children: ReactNode }) {
       add();
       return true;
     }
-    if (!credit) return false;
+    // Paquet absent de l'offre (hors ligne, store mal configuré) : c'est un échec, pas une annulation.
+    if (!credit) throw new Error('Diagnostic à l’unité indisponible');
     try {
       await Purchases.purchasePackage(credit);
       add();

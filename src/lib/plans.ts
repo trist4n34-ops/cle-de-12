@@ -9,6 +9,8 @@ export type Plan = {
   price: string;
   /** Équivalent mensuel de l'annuel (« 4,08 € »). */
   perMonth?: string;
+  /** Vrai si le store propose un essai gratuit sur cette formule. */
+  trial?: boolean;
   pkg?: PurchasesPackage;
 };
 
@@ -27,8 +29,14 @@ export function plansFrom(packages: PurchasesPackage[]): { plans: Plan[]; saving
   const monthly = packages.find((p) => String(p.packageType) === 'MONTHLY');
   const annual = packages.find((p) => String(p.packageType) === 'ANNUAL');
   const plans: Plan[] = [];
-  if (monthly) plans.push({ id: 'monthly', price: monthly.product.priceString, pkg: monthly });
+  if (monthly) plans.push({ id: 'monthly', price: monthly.product.priceString, trial: !!monthly.product.introPrice, pkg: monthly });
   if (annual)
-    plans.push({ id: 'annual', price: annual.product.priceString, perMonth: annual.product.pricePerMonthString ?? undefined, pkg: annual });
+    plans.push({
+      id: 'annual',
+      price: annual.product.priceString,
+      perMonth: annual.product.pricePerMonthString ?? undefined,
+      trial: !!annual.product.introPrice,
+      pkg: annual,
+    });
   return { plans, savings: monthly && annual ? annualSavings(monthly.product.price, annual.product.price) : null };
 }

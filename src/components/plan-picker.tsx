@@ -80,9 +80,14 @@ export function PlanPicker({
           </Pressable>
         );
       })}
-      <Button kind="signal" loading={busy} label={t('premium.plan.cta', { price: priceLabel(plan) })} onPress={() => onChoose(plan)} />
+      <Button
+        kind="signal"
+        loading={busy}
+        label={t(plan.trial ? 'premium.plan.cta' : 'premium.plan.ctaNoTrial', { price: priceLabel(plan) })}
+        onPress={() => onChoose(plan)}
+      />
       <ThemedText type="small" themeColor="textSecondary">
-        {t('premium.plan.trialNote', { price: priceLabel(plan) })}
+        {t(plan.trial ? 'premium.plan.trialNote' : 'premium.plan.renewNote', { price: priceLabel(plan) })}
       </ThemedText>
     </View>
   );

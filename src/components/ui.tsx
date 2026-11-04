@@ -101,6 +101,7 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
       accessibilityRole="checkbox"
       accessibilityState={{ checked: selected }}
       onPress={onPress}
+      hitSlop={CHIP_SLOP}
       style={[
         styles.chip,
         { borderColor: selected ? theme.accent : theme.line, backgroundColor: selected ? theme.accent : theme.backgroundElement },
@@ -121,7 +122,8 @@ export function Tag({ label, premium }: { label: string; premium?: boolean }) {
   );
 }
 
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+/** Champ de saisie ; `error` l'encadre en rouge et affiche le message dessous. */
+export function Field({ label, error, ...props }: TextInputProps & { label: string; error?: string }) {
   const theme = useTheme();
   return (
     <View style={styles.field}>
@@ -130,14 +132,20 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
       </ThemedText>
       <TextInput
         accessibilityLabel={label}
+        accessibilityHint={error}
         placeholderTextColor={theme.textSecondary}
         style={[
           styles.input,
-          { color: theme.text, borderColor: theme.line, backgroundColor: theme.backgroundElement },
+          { color: theme.text, borderColor: error ? theme.stop : theme.line, backgroundColor: theme.backgroundElement },
           props.multiline && { minHeight: 96, textAlignVertical: 'top' },
         ]}
         {...props}
       />
+      {error ? (
+        <ThemedText type="small" accessibilityLiveRegion="polite" style={{ color: theme.stop }}>
+          {error}
+        </ThemedText>
+      ) : null}
     </View>
   );
 }
@@ -192,6 +200,13 @@ export function Row({ style, ...props }: ViewProps) {
   return <View style={[styles.row, style]} {...props} />;
 }
 
+/**
+ * Les puces restent compactes (36 px) mais leur zone de toucher atteint 44 px
+ * de haut : 4 px de marge invisible au-dessus et au-dessous, moins que l'écart
+ * entre deux lignes de puces (8 px), donc sans chevauchement.
+ */
+const CHIP_SLOP = { top: 4, bottom: 4, left: 2, right: 2 } as const;
+
 const styles = StyleSheet.create({
   scroll: { paddingBottom: BottomTabInset + Spacing.five, alignItems: 'center' },
   column: { width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.three, paddingTop: Spacing.three, gap: Spacing.three },
@@ -210,7 +225,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     maxWidth: '100%',
   },
-  chip: { borderWidth: 1, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12, minHeight: 36, justifyContent: 'center' },
   tag: { alignSelf: 'flex-start', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
   tagText: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 },
   field: { gap: Spacing.one, flexGrow: 1, flexBasis: 150 },

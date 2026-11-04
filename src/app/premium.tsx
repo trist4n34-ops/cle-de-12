@@ -71,8 +71,8 @@ export default function PremiumScreen() {
   const offer = demo
     ? {
         plans: [
-          { id: 'monthly' as const, price: fmt(DEMO_PRICES.monthly) },
-          { id: 'annual' as const, price: fmt(DEMO_PRICES.annual), perMonth: fmt(Math.round((DEMO_PRICES.annual / 12) * 100) / 100) },
+          { id: 'monthly' as const, price: fmt(DEMO_PRICES.monthly), trial: true },
+          { id: 'annual' as const, price: fmt(DEMO_PRICES.annual), perMonth: fmt(Math.round((DEMO_PRICES.annual / 12) * 100) / 100), trial: true },
         ],
         savings: annualSavings(DEMO_PRICES.monthly, DEMO_PRICES.annual),
       }
@@ -113,13 +113,18 @@ export default function PremiumScreen() {
         <Card style={{ flexGrow: 1, flexBasis: 260, borderColor: theme.signal, borderWidth: 2 }}>
           <Row style={{ justifyContent: 'space-between' }}>
             <Eyebrow>Premium</Eyebrow>
-            <Tag label={t('premium.trial')} premium />
+            {offer.plans.some((plan) => plan.trial) ? <Tag label={t('premium.trial')} premium /> : null}
           </Row>
           {column(true)}
           {isPremium ? (
             <Tag label={t('premium.active')} premium />
           ) : (
             <>
+              {!offer.plans.length ? (
+                <ThemedText type="small" themeColor="textSecondary">
+                  {t('premium.plan.unavailable')}
+                </ThemedText>
+              ) : null}
               <PlanPicker
                 plans={offer.plans}
                 savings={offer.savings}

@@ -4,7 +4,7 @@ import { authenticate, jsonError, preflight, rateLimit, secure } from '@/server/
 import { GuideFeedbackInput, readJson } from '@/server/requests';
 import { usageStore } from '@/server/usage-store';
 
-const unknownGuide = () => jsonError('Guide inconnu.', 404);
+const unknownGuide = () => jsonError('Guide inconnu.', 404, 'guide_unknown');
 
 /** Avis de la communauté sur un guide : note moyenne et part de « réparé ». */
 export function GET(request: Request) {

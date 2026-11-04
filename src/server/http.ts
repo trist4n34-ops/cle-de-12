@@ -2,10 +2,12 @@
  * Socle commun des routes `/api` : en-têtes de sécurité, CORS, session signée,
  * limites de débit, droits (Premium, quotas, crédits) et erreurs génériques.
  * Les détails internes ne partent jamais vers le client : ils sont journalisés
- * côté serveur et le client reçoit un message générique en français.
+ * côté serveur et le client reçoit un message générique en français et un
+ * `code` stable que l'app traduit.
  */
 import type { z } from 'zod';
 
+import type { ErrorCode } from '@/lib/error-codes';
 import { ClaudeError } from '@/server/claude';
 import { getEntitlements } from '@/server/entitlements';
 import { checkRateLimit, clientIp, QuotaFeature, RateScope, Reservation, reserveQuota } from '@/server/limits';
@@ -22,8 +24,9 @@ export const SECURITY_HEADERS: Record<string, string> = {
 const CORS_METHODS = 'GET, POST, OPTIONS';
 const CORS_HEADERS = 'Authorization, Content-Type';
 
-export function jsonError(message: string, status: number, headers?: Record<string, string>) {
-  return Response.json({ error: message }, { status, headers });
+/** Erreur JSON `{ error, code }` : `code` est stable, l'app le traduit ; `error` est le texte français de repli. */
+export function jsonError(message: string, status: number, code: ErrorCode, headers?: Record<string, string>) {
+  return Response.json({ error: message, code }, { status, headers });
 }
 
 const GENERIC_ERROR = 'Une erreur est survenue. Réessayez dans quelques minutes.';
@@ -72,16 +75,16 @@ function finalize(request: Request, response: Response): Response {
  * en-têtes de sécurité et transforme toute exception en message générique.
  */
 export async function secure(request: Request, work: () => Promise<Response>): Promise<Response> {
-  if (!isOriginAllowed(request)) return finalize(request, jsonError('Origine non autorisée.', 403));
+  if (!isOriginAllowed(request)) return finalize(request, jsonError('Origine non autorisée.', 403, 'origin_forbidden'));
   try {
     return finalize(request, await work());
   } catch (e) {
     if (e instanceof SessionUnavailable) {
       console.error('[api] SESSION_SECRET manquant en production');
-      return finalize(request, jsonError(UNAVAILABLE, 503));
+      return finalize(request, jsonError(UNAVAILABLE, 503, 'service_unavailable'));
     }
     console.error('[api]', e);
-    return finalize(request, jsonError(GENERIC_ERROR, 500));
+    return finalize(request, jsonError(GENERIC_ERROR, 500, 'server_error'));
   }
 }
 
@@ -94,7 +97,7 @@ export function preflight(request: Request): Response {
 /** Utilisateur vérifié de la requête, ou réponse 401. */
 export async function authenticate(request: Request): Promise<{ userId: string } | Response> {
   const session = await verifySession(bearerToken(request));
-  if (!session) return jsonError('Session invalide ou expirée. Relancez l’app.', 401);
+  if (!session) return jsonError('Session invalide ou expirée. Relancez l’app.', 401, 'session_invalid');
   return { userId: session.userId };
 }
 
@@ -106,12 +109,15 @@ export async function rateLimit(request: Request, scope: RateScope, userId?: str
   return jsonError(
     `Trop de demandes en peu de temps. Réessayez dans ${minutes} minute${minutes > 1 ? 's' : ''}.`,
     429,
+    'rate_limited',
     { 'Retry-After': String(retryAfter) },
   );
 }
 
 /** Droit requis par un appel IA : Premium, ou une fonction soumise au quota gratuit. */
 export type Access = 'premium' | QuotaFeature;
+
+const QUOTA_CODES: Record<QuotaFeature, ErrorCode> = { diagnose: 'quota_diagnose', quote: 'quota_quote', ct: 'quota_ct' };
 
 const QUOTA_MESSAGES: Record<QuotaFeature, string> = {
   diagnose: 'Vous avez utilisé vos diagnostics gratuits du mois. Passez à Premium ou prenez un diagnostic à l’unité.',
@@ -123,10 +129,10 @@ async function reserve(userId: string, access: Access): Promise<Reservation | Re
   const entitlements = await getEntitlements(userId);
   if (access === 'premium') {
     if (entitlements.premium) return { source: 'premium', release: async () => undefined };
-    return jsonError('Cette fonction fait partie de Premium.', 402);
+    return jsonError('Cette fonction fait partie de Premium.', 402, 'premium_required');
   }
   const reservation = await reserveQuota(usageStore(), userId, access, entitlements);
-  return reservation ?? jsonError(QUOTA_MESSAGES[access], 402);
+  return reservation ?? jsonError(QUOTA_MESSAGES[access], 402, QUOTA_CODES[access]);
 }
 
 /**
@@ -134,16 +140,16 @@ async function reserve(userId: string, access: Access): Promise<Reservation | Re
  * réservation du quota, puis restitution si l'appel échoue.
  */
 export async function runAi(userId: string, access: Access, work: () => Promise<unknown>): Promise<Response> {
-  if (!process.env.ANTHROPIC_API_KEY) return jsonError('L’IA n’est pas configurée sur ce serveur.', 503);
+  if (!process.env.ANTHROPIC_API_KEY) return jsonError('L’IA n’est pas configurée sur ce serveur.', 503, 'ai_not_configured');
   const reservation = await reserve(userId, access);
   if (reservation instanceof Response) return reservation;
   try {
     return Response.json(await work());
   } catch (e) {
     await reservation.release().catch((err) => console.error('[api] quota non restitué', err));
-    if (e instanceof ClaudeError) return jsonError(e.message, e.status);
+    if (e instanceof ClaudeError) return jsonError(e.message, e.status, e.code);
     console.error('[api] appel IA', e);
-    return jsonError('L’IA est momentanément indisponible. Réessayez dans quelques minutes.', 502);
+    return jsonError('L’IA est momentanément indisponible. Réessayez dans quelques minutes.', 502, 'ai_unavailable');
   }
 }
 

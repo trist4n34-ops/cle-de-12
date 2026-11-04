@@ -2,6 +2,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { ApiErrorNotice } from '@/components/api-error-notice';
 import { PlanView } from '@/components/diagnosis-view';
 import { GuideFeedbackCard } from '@/components/guide-feedback';
 import { ThemedText } from '@/components/themed-text';
@@ -10,9 +11,9 @@ import { Spacing } from '@/constants/theme';
 import { findCategory, findGuide, formatMinutes, GuideStep } from '@/data/guides';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
-import { api, ApiError, stripId } from '@/lib/api';
+import { api, stripId } from '@/lib/api';
 import { usePremium } from '@/lib/purchases';
-import { RepairPlan } from '@/lib/repair-plan';
+import { guidePlanKey, MAX_SAVED_PLANS, putSaved } from '@/lib/saved-results';
 import { useCurrentVehicle, useStore } from '@/lib/store';
 import { builtInTechData, TechSource } from '@/lib/tech-data';
 
@@ -25,8 +26,7 @@ export default function GuideScreen() {
   const { isPremium } = usePremium();
   const { state, update } = useStore();
   const [data, setData] = useState<{ steps: GuideStep[]; source: TechSource } | null>(null);
-  const [plan, setPlan] = useState<RepairPlan | null>(null);
-  const [planError, setPlanError] = useState('');
+  const [planError, setPlanError] = useState<unknown>(null);
   const [planLoading, setPlanLoading] = useState(false);
 
   useEffect(() => {
@@ -42,19 +42,19 @@ export default function GuideScreen() {
   const locked = guide.premium && !isPremium;
   const progress = state.progress[guide.id] ?? [];
   const steps = data?.steps ?? guide.steps;
+  // Plan adapté au véhicule courant, gardé sur l'appareil.
+  const planKey = vehicle ? guidePlanKey(vehicle.id, guide.id) : null;
+  const plan = (planKey && state.repairPlans?.[planKey]?.value) || null;
 
   const adapt = async () => {
-    if (!vehicle) return;
+    if (!vehicle || !planKey) return;
     setPlanLoading(true);
-    setPlanError('');
+    setPlanError(null);
     try {
-      setPlan(await api.repairPlan(stripId(vehicle), guide.title, 'Guide ' + guide.title));
+      const next = await api.repairPlan(stripId(vehicle), guide.title, 'Guide ' + guide.title);
+      update((s) => ({ ...s, repairPlans: putSaved(s.repairPlans, planKey, next, MAX_SAVED_PLANS) }));
     } catch (e) {
-      setPlanError(
-        e instanceof ApiError
-          ? t('guides.adaptFailedReason', { reason: e.message })
-          : t('guides.adaptFailed'),
-      );
+      setPlanError(e);
     } finally {
       setPlanLoading(false);
     }
@@ -147,19 +147,23 @@ export default function GuideScreen() {
                   vehicle: [vehicle.make, vehicle.model, vehicle.engine].filter(Boolean).join(' '),
                 })}
               </ThemedText>
-              {plan ? (
-                <PlanView plan={plan} />
-              ) : (
-                <Button label={t('guides.adapt.title')} loading={planLoading} onPress={adapt} />
-              )}
-              {planError ? <ThemedText themeColor="textSecondary">{planError}</ThemedText> : null}
+              {plan ? <PlanView plan={plan} /> : null}
+              <Row>
+                <Button
+                  kind={plan ? 'ghost' : 'primary'}
+                  label={plan ? t('dv.planRedo') : t('guides.adapt.title')}
+                  loading={planLoading}
+                  onPress={adapt}
+                />
+              </Row>
+              {planError ? <ApiErrorNotice error={planError} fallback={t('guides.adaptFailed')} /> : null}
             </>
           ) : (
             <>
               <ThemedText type="small" themeColor="textSecondary">
                 {t('guides.adapt.noVehicle')}
               </ThemedText>
-              <Button kind="ghost" label={t('guides.adapt.addVehicle')} onPress={() => router.push('/garage')} />
+              <Button kind="ghost" label={t('guides.adapt.addVehicle')} onPress={() => router.navigate('/')} />
             </>
           )}
         </Card>
