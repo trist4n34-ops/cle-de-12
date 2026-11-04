@@ -2,6 +2,7 @@
 import { z } from 'zod';
 
 import { FUELS } from '@/lib/diagnosis';
+import { FELT_DIFFICULTY, MAX_FEEDBACK_COMMENT, OUTCOMES } from '@/lib/guide-feedback';
 
 /** Corps JSON maximal accepté (photo base64 comprise). */
 export const MAX_BODY_BYTES = 6 * 1024 * 1024;
@@ -91,6 +92,15 @@ export const QuoteInput = z.object({
   context: z.string().max(4000).optional(),
 });
 
+export const GuideFeedbackInput = z.object({
+  guideId: z.string().regex(/^[a-z0-9-]{1,60}$/),
+  rating: z.number().int().min(1).max(5),
+  outcome: z.enum(OUTCOMES),
+  difficulty: z.enum(FELT_DIFFICULTY),
+  comment: z.string().max(MAX_FEEDBACK_COMMENT).optional(),
+  language: LanguageInput,
+});
+
 export const PlatePhotoInput = z.object({ photo: PhotoInput });
 
 export const CtInput = z.object({
@@ -99,8 +109,8 @@ export const CtInput = z.object({
   photo: PhotoInput,
 });
 
-const invalid = () => Response.json({ error: 'Requête invalide.' }, { status: 400 });
-const tooLarge = () => Response.json({ error: 'Requête trop volumineuse.' }, { status: 413 });
+const invalid = () => Response.json({ error: 'Requête invalide.', code: 'invalid_request' }, { status: 400 });
+const tooLarge = () => Response.json({ error: 'Requête trop volumineuse.', code: 'too_large' }, { status: 413 });
 
 /** Lit le corps en s'arrêtant dès qu'il dépasse `max` octets ; null s'il est trop gros. */
 export async function readBodyText(request: Request, max = MAX_BODY_BYTES): Promise<string | null> {

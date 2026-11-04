@@ -2,12 +2,15 @@ import { NativeTabs } from 'expo-router/native-tabs';
 import { useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { useReminderSync } from '@/hooks/use-reminder-sync';
 import { useT } from '@/i18n';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
   const { t } = useT();
+  // Rappels d'entretien et de contrôle technique (notifications locales).
+  useReminderSync();
 
   return (
     <NativeTabs

@@ -9,3 +9,4 @@ const unavailable = () =>
 export const requestBlePermissions = async () => false;
 export const findDongle = unavailable;
 export const connectBle = (): Promise<ObdTransport> => unavailable();
+export const openDongle = (): Promise<ObdTransport> => unavailable();

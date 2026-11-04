@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
+import { ApiErrorNotice } from '@/components/api-error-notice';
 import { ExternalLink } from '@/components/external-link';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Dots, Eyebrow, Heading, LockBox, Row, Screen, Tag, Title, Verdict } from '@/components/ui';
@@ -10,11 +11,12 @@ import { CT_AREAS, CT_CHECKLIST } from '@/data/ct-checklist';
 import { findGuide } from '@/data/guides';
 import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
-import { api, ApiError, stripId } from '@/lib/api';
+import { api, stripId } from '@/lib/api';
 import { CtLevel, CtReport } from '@/lib/ct';
 import { garageLinks, partLinks } from '@/lib/partners';
 import { pickPhoto } from '@/lib/photo';
 import { usePremium } from '@/lib/purchases';
+import { MAX_SAVED_ANALYSES, putSaved, removeSaved } from '@/lib/saved-results';
 import { FREE_CT_REPORTS_PER_MONTH, usage, useCurrentVehicle, useStore } from '@/lib/store';
 
 const LEVEL = {
@@ -47,12 +49,14 @@ function LevelBadge({ level }: { level: CtLevel }) {
 
 export default function ControleTechniqueScreen() {
   const theme = useTheme();
-  const { t, tn } = useT();
+  const { t, tn, date } = useT();
   const { state, update } = useStore();
   const { isPremium } = usePremium();
   const vehicle = useCurrentVehicle();
-  const [report, setReport] = useState<CtReport | null>(null);
-  const [error, setError] = useState('');
+  // Dernière analyse de procès-verbal du véhicule, gardée sur l'appareil.
+  const saved = vehicle ? state.ctReports?.[vehicle.id] : undefined;
+  const report = saved?.value ?? null;
+  const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
 
   const key = `ct:${vehicle?.id ?? 'sans-vehicule'}`;
@@ -75,12 +79,16 @@ export default function ControleTechniqueScreen() {
     const photo = await pickPhoto(source);
     if (!photo) return;
     setLoading(true);
-    setError('');
+    setError(null);
     try {
-      setReport(await api.ct(stripId(vehicle), photo));
-      if (!isPremium) update((s) => ({ ...s, usage: { ...s.usage, ct: (s.usage.ct ?? 0) + 1 } }));
+      const next = await api.ct(stripId(vehicle), photo);
+      update((s) => ({
+        ...s,
+        ctReports: putSaved(s.ctReports, vehicle.id, next, MAX_SAVED_ANALYSES),
+        usage: isPremium ? s.usage : { ...s.usage, ct: (s.usage.ct ?? 0) + 1 },
+      }));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t('common.analysisFailed'));
+      setError(e);
     } finally {
       setLoading(false);
     }
@@ -162,12 +170,22 @@ export default function ControleTechniqueScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             {isPremium ? t('common.unlimitedAnalyses') : tn('common.freeAnalysesLeft', left)} {t('common.photoPrivacy')}
           </ThemedText>
-          {error ? <ThemedText>{error}</ThemedText> : null}
+          {error ? <ApiErrorNotice error={error} fallback={t('common.analysisFailed')} /> : null}
         </Card>
       )}
 
-      {report && worst ? (
+      {report && worst && saved && vehicle ? (
         <>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('common.savedOn', { date: date(saved.at) })}
+            </ThemedText>
+            <Button
+              kind="ghost"
+              label={t('common.clearResult')}
+              onPress={() => update((s) => ({ ...s, ctReports: removeSaved(s.ctReports, vehicle.id) }))}
+            />
+          </Row>
           <Card>
             <Verdict urgency={VERDICT[worst].urgency} title={t(VERDICT[worst].title)} reason={report.summary} />
             <ThemedText type="smallBold">{report.deadline}</ThemedText>

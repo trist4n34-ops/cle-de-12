@@ -1,7 +1,8 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Platform, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 
+import { ApiErrorNotice } from '@/components/api-error-notice';
 import { DiagnosisView } from '@/components/diagnosis-view';
 import { KnownIssues } from '@/components/known-issues';
 import { LiveData } from '@/components/live-data';
@@ -13,85 +14,126 @@ import { Spacing } from '@/constants/theme';
 import { extractCodes } from '@/data/obd-codes';
 import { SYMPTOMS } from '@/data/symptoms';
 import { useObdReader } from '@/features/obd/use-obd-reader';
+import { RunInput, useDiagnosisRunner } from '@/hooks/use-diagnosis-runner';
+import { useTheme } from '@/hooks/use-theme';
 import { useT } from '@/i18n';
-import { api, ApiError, stripId } from '@/lib/api';
-import { DiagnosisRecord, DiagnosisRequest, vehicleLabel } from '@/lib/diagnosis';
-import { localDiagnosis } from '@/lib/local-diagnosis';
+import { latestForVehicle, recordVehicle } from '@/lib/diagnosis';
 import { pickPhoto } from '@/lib/photo';
 import { usePremium } from '@/lib/purchases';
-import { FREE_DIAGNOSES_PER_MONTH, newId, usage, useCurrentVehicle, useStore } from '@/lib/store';
+import { FREE_DIAGNOSES_PER_MONTH, newId, useCurrentVehicle, useStore } from '@/lib/store';
 
 export default function DiagnosticScreen() {
   const { state, update } = useStore();
   const { t, tn } = useT();
+  const theme = useTheme();
   const { isPremium, buyCredit, creditPrice } = usePremium();
   const [buying, setBuying] = useState(false);
   const vehicle = useCurrentVehicle();
   const obd = useObdReader();
+  const runner = useDiagnosisRunner();
+  const { left, credits, useCredit, blocked, note, setNote } = runner;
+  // « Relancer » depuis un diagnostic : /?retry=<id>&at=<horodatage> (prérempli), &auto=1 (relancé aussitôt).
+  const params = useLocalSearchParams<{ retry?: string; auto?: string; at?: string }>();
 
   const [symptoms, setSymptoms] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [codesText, setCodesText] = useState('');
   const [photo, setPhoto] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
-  const [note, setNote] = useState('');
-  const [result, setResult] = useState<DiagnosisRecord | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
 
-  const used = usage(state).diagnoses;
-  const left = Math.max(0, FREE_DIAGNOSES_PER_MONTH - used);
-  const credits = state.credits ?? 0;
-  // Après le quota gratuit, un diagnostic acheté à l'unité prend le relais.
-  const useCredit = !isPremium && left === 0 && credits > 0;
-  const blocked = !isPremium && left === 0 && credits === 0;
-  const latest = result ?? state.history[0];
+  // Seul le dernier diagnostic du véhicule affiché, jamais celui d'une autre voiture.
+  const latest = latestForVehicle(state.history, vehicle?.id, state.vehicles.length);
 
   const scanned = obd.scan ? [...obd.scan.stored, ...obd.scan.pending] : [];
   const codes = [...new Set([...extractCodes(codesText), ...scanned])];
 
   const toggle = (id: string) => setTags((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t, id]));
 
-  const run = async () => {
+  const { run: runDiagnosis } = runner;
+  /** Lance le diagnostic puis ouvre son résultat (IA, ou base intégrée sans réseau). */
+  const launch = useCallback(
+    async (input: RunInput) => {
+      const record = await runDiagnosis(input);
+      if (record) router.push(`/result/${record.id}`);
+    },
+    [runDiagnosis],
+  );
+
+  const run = () => {
     if (!vehicle || blocked) return;
     if (!symptoms.trim() && !tags.length && !codes.length) {
       setNote(t('diag.needInput'));
       return;
     }
     const v = obd.scan?.vin && !vehicle.vin ? { ...vehicle, vin: obd.scan.vin } : vehicle;
-    const req: DiagnosisRequest = {
-      vehicle: stripId(v),
-      symptoms: symptoms.trim(),
+    void launch({
+      vehicle: v,
+      symptoms,
       symptomTags: tags.map((id) => SYMPTOMS.find((s) => s.id === id)?.label ?? id),
+      tagIds: tags,
       codes,
-      photo: isPremium && photo ? photo : undefined,
-    };
-    setRunning(true);
-    setNote('');
-    let record: DiagnosisRecord;
-    try {
-      const ai = await api.diagnose(req);
-      record = { id: newId(), date: new Date().toISOString(), vehicleLabel: vehicleLabel(v), symptoms: req.symptoms || req.symptomTags.join(', '), codes, result: ai, source: 'ai' };
-    } catch (e) {
-      setNote(t('diag.offlineFallback', { reason: e instanceof ApiError ? e.message : t('diag.aiDown') }));
-      record = {
-        id: newId(),
-        date: new Date().toISOString(),
-        vehicleLabel: vehicleLabel(v),
-        symptoms: req.symptoms || req.symptomTags.join(', '),
-        codes,
-        result: localDiagnosis({ ...req, symptomTags: tags }),
-        source: 'offline',
-      };
-    } finally {
-      setRunning(false);
+      photo: photo ?? undefined,
+    });
+  };
+
+  // Formulaire prérempli dès le rendu (motif « état dérivé d'une nouvelle prop »).
+  const record = params.retry ? state.history.find((h) => h.id === params.retry) : undefined;
+  const retryKey = record ? `${record.id}:${params.at ?? ''}` : null;
+  const [prefilled, setPrefilled] = useState<string | null>(null);
+  if (record && retryKey && retryKey !== prefilled) {
+    setPrefilled(retryKey);
+    setSymptoms(record.symptoms);
+    setTags([]);
+    setCodesText(record.codes.join(' '));
+  }
+  // Puis, une seule fois par demande : véhicule du diagnostic, relance éventuelle.
+  const handledRetry = useRef<string | null>(null);
+  useEffect(() => {
+    if (!record || !retryKey || handledRetry.current === retryKey) return;
+    handledRetry.current = retryKey;
+    router.setParams({ retry: undefined, auto: undefined, at: undefined });
+    const v = recordVehicle(record, state.vehicles, vehicle);
+    if (v && v.id !== vehicle?.id && state.vehicles.some((x) => x.id === v.id)) update((s) => ({ ...s, vehicleId: v.id }));
+    if (params.auto === '1' && v) {
+      void launch({
+        vehicle: v,
+        symptoms: record.symptoms,
+        symptomTags: [],
+        tagIds: [],
+        codes: record.codes,
+        // Le résultat IA remplace le diagnostic hors ligne dans l'historique.
+        replaces: record.source === 'offline' ? record.id : undefined,
+      });
+    } else {
+      setNote(t('diag.retried'));
     }
-    setResult(record);
-    update((s) => ({
-      ...s,
-      vehicles: s.vehicles.map((x) => (x.id === v.id ? v : x)),
-      history: [record, ...s.history].slice(0, 50),
-      usage: { ...s.usage, diagnoses: s.usage.diagnoses + (isPremium || useCredit || record.source === 'offline' ? 0 : 1) },
-      credits: useCredit && record.source === 'ai' ? Math.max(0, (s.credits ?? 0) - 1) : (s.credits ?? 0),
-    }));
+  }, [record, retryKey, params.auto, state.vehicles, vehicle, update, launch, setNote, t]);
+
+  // Codes en cours d'effacement : notés dans le carnet une fois l'effacement confirmé par le dongle.
+  const clearing = useRef<string[] | null>(null);
+  useEffect(() => {
+    const cleared = clearing.current;
+    if (!cleared) return;
+    if (obd.status === 'error') clearing.current = null;
+    if (obd.status !== 'done' || obd.scan) return;
+    clearing.current = null;
+    if (!vehicle || !cleared.length) return;
+    const entry = {
+      id: newId(),
+      vehicleId: vehicle.id,
+      date: new Date().toISOString(),
+      mileage: vehicle.mileage ?? '',
+      operation: t('diag.clear.log', { codes: cleared.join(', ') }),
+    };
+    update((s) => ({ ...s, log: [entry, ...s.log] }));
+  }, [obd.status, obd.scan, vehicle, update, t]);
+
+  const clearCodes = () => {
+    setConfirmClear(false);
+    // Les codes lus restent dans le formulaire : on peut encore les diagnostiquer après effacement.
+    setCodesText((text) => [...new Set([...extractCodes(text), ...scanned])].join(' '));
+    clearing.current = scanned;
+    void obd.clear();
   };
 
   return (
@@ -115,8 +157,20 @@ export default function DiagnosticScreen() {
                 loading={obd.status === 'searching' || obd.status === 'reading'}
                 onPress={obd.read}
               />
-              {obd.scan ? <Button kind="ghost" label={t('diag.codes.clear')} onPress={obd.clear} /> : null}
+              {obd.scan && !confirmClear ? (
+                <Button kind="ghost" label={t('diag.codes.clear')} onPress={() => setConfirmClear(true)} />
+              ) : null}
             </Row>
+          ) : null}
+          {confirmClear ? (
+            <View style={[styles.confirm, { backgroundColor: theme.warnBg, borderLeftColor: theme.warn }]}>
+              <ThemedText type="smallBold">{t('diag.clear.title')}</ThemedText>
+              <ThemedText type="small">{t('diag.clear.body')}</ThemedText>
+              <Row>
+                <Button kind="ghost" label={t('diag.clear.confirm')} onPress={clearCodes} />
+                <Button kind="ghost" label={t('diag.clear.cancel')} onPress={() => setConfirmClear(false)} />
+              </Row>
+            </View>
           ) : null}
           {obd.message ? <ThemedText type="small">{obd.message}</ThemedText> : null}
           {obd.scan?.milOn ? <ThemedText type="small">{t('diag.codes.mil')}</ThemedText> : null}
@@ -191,7 +245,7 @@ export default function DiagnosticScreen() {
             </>
           ) : (
             <Row>
-              <Button label={t('diag.run')} loading={running} onPress={run} />
+              <Button label={t('diag.run')} loading={runner.running} onPress={run} />
               <ThemedText type="small" themeColor="textSecondary">
                 {isPremium
                   ? t('diag.unlimited')
@@ -201,6 +255,12 @@ export default function DiagnosticScreen() {
               </ThemedText>
             </Row>
           )}
+          {runner.running ? (
+            <ThemedText type="small" themeColor="textSecondary" accessibilityLiveRegion="polite">
+              {t(runner.progress)}
+            </ThemedText>
+          ) : null}
+          {runner.failure ? <ApiErrorNotice error={runner.failure} credit onPurchased={runner.clearFailure} /> : null}
           {note ? <ThemedText type="small" themeColor="textSecondary">{note}</ThemedText> : null}
         </Card>
       ) : null}
@@ -229,7 +289,11 @@ export default function DiagnosticScreen() {
         </Row>
       </Card>
 
-      {latest ? <DiagnosisView record={latest} /> : null}
+      {latest ? <DiagnosisView key={latest.id} record={latest} /> : null}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  confirm: { borderLeftWidth: 6, borderRadius: 10, padding: Spacing.three, gap: Spacing.two },
+});

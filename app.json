@@ -8,7 +8,7 @@
     "scheme": "clede12",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "fr.cle12.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -52,6 +52,13 @@
         {
           "photosPermission": "Clé de 12 analyse la photo choisie (voyant, fuite, devis) pour affiner le diagnostic.",
           "cameraPermission": "Clé de 12 photographie un voyant, une pièce ou un devis pour l’analyser."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#1F5FAF"
         }
       ]
     ],

@@ -96,7 +96,9 @@ npx expo export -p web
 npx eas-cli@latest deploy
 ```
 
-Then put the resulting URL in `app.json` (`plugins` → `expo-router` → `origin`) so the mobile app calls that server.
+Then set `API_ORIGIN` to the resulting URL in the EAS environment of the `production` profile, so the mobile app calls that server (`app.config.js` passes it to expo-router as `origin`). A production build fails without it.
+
+Without RevenueCat keys, the free "demo" Premium only exists in development or when `EXPO_PUBLIC_DEMO=1` (used for the web demo); a production build never unlocks Premium for free.
 
 ## Security
 

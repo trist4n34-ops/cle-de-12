@@ -60,13 +60,51 @@ export type DiagnosisRecord = {
   id: string;
   date: string;
   vehicleLabel: string;
+  /** Véhicule diagnostiqué (absent des diagnostics enregistrés avant la v4). */
+  vehicleId?: string;
+  /** Le véhicule tel qu'il était au moment du diagnostic, si on l'a supprimé depuis. */
+  vehicle?: Vehicle;
   symptoms: string;
   codes: string[];
   result: Diagnosis;
   source: 'ai' | 'offline';
-  /** Retour de l'utilisateur après réparation : sert à recaler les probabilités. */
+  /**
+   * Retour de l'utilisateur après réparation : sert à recaler les probabilités.
+   * `fixed: false` (« pas encore ») garde la question ouverte : elle revient à
+   * la prochaine ouverture, `at` date le dernier « pas encore ».
+   */
   feedback?: { fixed: boolean; causeIndex?: number; at: string };
+  /** Questions de suivi posées sur ce diagnostic (bornées, voir capTurns). */
+  chat?: { role: 'user' | 'assistant'; content: string }[];
 };
+
+/**
+ * Véhicule d'un diagnostic : la fiche actuelle du véhicule diagnostiqué, sinon
+ * sa copie gardée dans le diagnostic (véhicule supprimé), sinon, pour un
+ * ancien diagnostic sans véhicule, le véhicule courant.
+ */
+export function recordVehicle(
+  record: Pick<DiagnosisRecord, 'vehicleId' | 'vehicle'>,
+  vehicles: Vehicle[],
+  current: Vehicle | undefined,
+): Vehicle | undefined {
+  if (record.vehicleId) return vehicles.find((v) => v.id === record.vehicleId) ?? record.vehicle;
+  return record.vehicle ?? current;
+}
+
+/**
+ * Dernier diagnostic du véhicule courant (l'historique est du plus récent au
+ * plus ancien). Les anciens diagnostics sans véhicule ne comptent que s'il n'y
+ * a qu'un véhicule : on ne peut pas savoir à quelle voiture ils se rapportent.
+ */
+export function latestForVehicle(
+  history: DiagnosisRecord[],
+  vehicleId: string | undefined,
+  vehicleCount: number,
+): DiagnosisRecord | undefined {
+  if (!vehicleId) return undefined;
+  return history.find((h) => (h.vehicleId ? h.vehicleId === vehicleId : vehicleCount <= 1));
+}
 
 export function vehicleLabel(v: Partial<Vehicle>): string {
   const km = v.mileage ? Number(String(v.mileage).replace(/\D/g, '')) : NaN;

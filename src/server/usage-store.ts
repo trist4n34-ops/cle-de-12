@@ -17,6 +17,10 @@ export interface UsageStore {
   incr(key: string, ttlSeconds: number, by?: number): Promise<number>;
   /** Valeur courante du compteur, 0 s'il n'existe pas. */
   get(key: string): Promise<number>;
+  /** Valeurs de plusieurs compteurs en un seul aller-retour (0 pour un compteur absent). */
+  getMany(keys: string[]): Promise<number[]>;
+  /** Supprime les compteurs donnés (les absents sont ignorés). */
+  del(keys: string[]): Promise<void>;
 }
 
 /** Stockage en mémoire, par instance : développement et tests uniquement. */
@@ -50,6 +54,14 @@ export class MemoryUsageStore implements UsageStore {
 
   async get(key: string): Promise<number> {
     return this.live(key)?.value ?? 0;
+  }
+
+  async getMany(keys: string[]): Promise<number[]> {
+    return keys.map((key) => this.live(key)?.value ?? 0);
+  }
+
+  async del(keys: string[]): Promise<void> {
+    for (const key of keys) this.entries.delete(key);
   }
 }
 
@@ -86,6 +98,17 @@ export class UpstashUsageStore implements UsageStore {
   async get(key: string): Promise<number> {
     const [r] = await this.pipeline([['GET', key]]);
     return r.result == null ? 0 : Number(r.result);
+  }
+
+  async getMany(keys: string[]): Promise<number[]> {
+    if (!keys.length) return [];
+    const [r] = await this.pipeline([['MGET', ...keys]]);
+    const values = Array.isArray(r.result) ? r.result : [];
+    return keys.map((_, i) => (values[i] == null ? 0 : Number(values[i])));
+  }
+
+  async del(keys: string[]): Promise<void> {
+    if (keys.length) await this.pipeline([['DEL', ...keys]]);
   }
 }
 

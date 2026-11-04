@@ -1,17 +1,30 @@
 import { ReactNode, useState } from 'react';
 import { Platform, View } from 'react-native';
 
+import { CtLine } from '@/components/ct-line';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Chip, Eyebrow, Field, Row } from '@/components/ui';
-import { api, ApiError } from '@/lib/api';
+import { api } from '@/lib/api';
 import { CAR_MAKES, findMake, findModel, MODEL_COUNT, searchMakes, searchModels } from '@/data/vehicles';
 import { type TKey, useT } from '@/i18n';
+import { errorText } from '@/i18n/errors';
 import { Fuel, FUELS, Vehicle, vehicleLabel } from '@/lib/diagnosis';
+import { DATE_ERROR_KEYS, formatDateInput, parseDateInput, vehicleKm } from '@/lib/garage';
 import { pickPhoto } from '@/lib/photo';
 import { newId, useCurrentVehicle, useStore } from '@/lib/store';
 import { usePremium } from '@/lib/purchases';
+import { markMileageUpdated, setVehicleExtras, useReminderData } from '@/lib/reminder-store';
+import type { VehicleExtras } from '@/lib/reminders';
 
 const EMPTY: Omit<Vehicle, 'id'> = { make: '', model: '', year: '', mileage: '', engine: '', fuel: 'Essence' };
+
+/** Contrôle technique tel que saisi (texte libre, validé à l'enregistrement). */
+type CtDraft = { lastCt: string; firstRegistration: string; counterVisit: boolean };
+const ctDraft = (x?: VehicleExtras): CtDraft => ({
+  lastCt: x?.lastCt ? formatDateInput(x.lastCt) : '',
+  firstRegistration: x?.firstRegistration ? formatDateInput(x.firstRegistration) : '',
+  counterVisit: !!x?.counterVisit,
+});
 
 /** Libellé affiché de chaque énergie ; la valeur enregistrée reste celle de `FUELS`. */
 const FUEL_LABELS: Record<Fuel, TKey> = {
@@ -24,17 +37,43 @@ const FUEL_LABELS: Record<Fuel, TKey> = {
 
 /** Carte du véhicule courant : affichage, changement, ajout et identification par la plaque. */
 export function VehicleCard() {
-  const { t, num } = useT();
+  const { t, tn, num } = useT();
   const { state, update } = useStore();
   const { isPremium } = usePremium();
   const current = useCurrentVehicle();
+  const { extras } = useReminderData();
   const [editing, setEditing] = useState<Vehicle | null>(current ? null : { id: newId(), ...EMPTY });
+  const [ct, setCt] = useState<CtDraft>(ctDraft);
+  const [ctErrors, setCtErrors] = useState<{ lastCt?: string; firstRegistration?: string }>({});
   const [plateMsg, setPlateMsg] = useState('');
   const [looking, setLooking] = useState(false);
 
   const canAdd = isPremium || state.vehicles.length === 0;
 
+  const startEditing = (v: Vehicle) => {
+    setEditing(v);
+    setCt(ctDraft(extras[v.id]));
+    setCtErrors({});
+  };
+
   const save = (v: Vehicle) => {
+    // Dates du contrôle technique : facultatives, mais exactes si elles sont saisies.
+    const last = ct.lastCt.trim() ? parseDateInput(ct.lastCt) : null;
+    const first = ct.firstRegistration.trim() ? parseDateInput(ct.firstRegistration) : null;
+    const errors = {
+      lastCt: last && !last.ok ? t(DATE_ERROR_KEYS[last.error]) : undefined,
+      firstRegistration: first && !first.ok ? t(DATE_ERROR_KEYS[first.error]) : undefined,
+    };
+    setCtErrors(errors);
+    if (errors.lastCt || errors.firstRegistration) return;
+    const lastCt = last?.ok ? last.value : undefined;
+    setVehicleExtras(v.id, {
+      lastCt,
+      firstRegistration: first?.ok ? first.value : undefined,
+      counterVisit: lastCt && ct.counterVisit ? true : undefined,
+    });
+    const before = state.vehicles.find((x) => x.id === v.id);
+    if (vehicleKm(v) && vehicleKm(v) !== (before ? vehicleKm(before) : 0)) markMileageUpdated(v.id);
     update((s) => {
       const exists = s.vehicles.some((x) => x.id === v.id);
       return {
@@ -55,7 +94,7 @@ export function VehicleCard() {
       setEditing({ ...editing, ...found, mileage: editing.mileage });
       setPlateMsg(t('vehicle.plate.found'));
     } catch (e) {
-      setPlateMsg(e instanceof ApiError ? e.message : t('vehicle.plate.lookupFailed'));
+      setPlateMsg(errorText(e, { t, tn }, t('vehicle.plate.lookupFailed')));
     } finally {
       setLooking(false);
     }
@@ -78,7 +117,7 @@ export function VehicleCard() {
         setPlateMsg(t('vehicle.plate.readNoVehicle', { plate, check }));
       }
     } catch (e) {
-      setPlateMsg(e instanceof ApiError ? e.message : t('vehicle.plate.readFailed'));
+      setPlateMsg(errorText(e, { t, tn }, t('vehicle.plate.readFailed')));
     } finally {
       setLooking(false);
     }
@@ -92,8 +131,9 @@ export function VehicleCard() {
           {current.plate ? <ThemedText type="code">{current.plate}</ThemedText> : null}
         </Row>
         <ThemedText type="smallBold">{vehicleLabel(current)}</ThemedText>
+        <CtLine vehicle={current} hideUnknown />
         <Row>
-          <Button kind="ghost" label={t('vehicle.edit')} onPress={() => setEditing(current)} />
+          <Button kind="ghost" label={t('vehicle.edit')} onPress={() => startEditing(current)} />
           {state.vehicles.length > 1
             ? state.vehicles
                 .filter((v) => v.id !== current.id)
@@ -110,7 +150,7 @@ export function VehicleCard() {
             kind="ghost"
             label={canAdd ? t('vehicle.add') : t('vehicle.addPremium')}
             disabled={!canAdd}
-            onPress={() => setEditing({ id: newId(), ...EMPTY })}
+            onPress={() => startEditing({ id: newId(), ...EMPTY })}
           />
         </Row>
       </Card>
@@ -178,6 +218,38 @@ export function VehicleCard() {
             <Chip key={f} label={t(FUEL_LABELS[f])} selected={editing.fuel === f} onPress={() => set({ fuel: f })} />
           ))}
         </Row>
+      </View>
+      <View style={{ gap: 6 }}>
+        <Row style={{ alignItems: 'flex-start' }}>
+          <Field
+            label={t('vehicle.ct.last')}
+            placeholder={t('garage.datePlaceholder')}
+            keyboardType="numbers-and-punctuation"
+            value={ct.lastCt}
+            onChangeText={(lastCt) => setCt({ ...ct, lastCt })}
+            error={ctErrors.lastCt}
+          />
+          <Field
+            label={t('vehicle.ct.firstReg')}
+            placeholder={t('garage.datePlaceholder')}
+            keyboardType="numbers-and-punctuation"
+            value={ct.firstRegistration}
+            onChangeText={(firstRegistration) => setCt({ ...ct, firstRegistration })}
+            error={ctErrors.firstRegistration}
+          />
+        </Row>
+        {ct.lastCt.trim() ? (
+          <Row>
+            <Chip
+              label={t('vehicle.ct.counterVisit')}
+              selected={ct.counterVisit}
+              onPress={() => setCt({ ...ct, counterVisit: !ct.counterVisit })}
+            />
+          </Row>
+        ) : null}
+        <ThemedText type="small" themeColor="textSecondary">
+          {t('vehicle.ct.hint')}
+        </ThemedText>
       </View>
       <Row>
         <Button label={t('vehicle.save')} disabled={!valid} onPress={() => save({ ...editing, make: editing.make.trim(), model: editing.model.trim() })} />

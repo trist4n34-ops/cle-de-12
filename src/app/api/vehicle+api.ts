@@ -11,12 +11,12 @@ export function GET(request: Request) {
     const plate = (new URL(request.url).searchParams.get('plate') ?? '').slice(0, 20);
     try {
       const vehicle = await lookupPlate(plate);
-      if (!vehicle) return jsonError('Plaque introuvable. Vérifiez le format (AB-123-CD).', 404);
+      if (!vehicle) return jsonError('Plaque introuvable. Vérifiez le format (AB-123-CD).', 404, 'plate_not_found');
       return Response.json(vehicle);
     } catch (e) {
-      if (e instanceof PlateLookupUnavailable) return jsonError('La recherche par plaque n’est pas encore disponible. Saisissez le véhicule à la main.', 501);
+      if (e instanceof PlateLookupUnavailable) return jsonError('La recherche par plaque n’est pas encore disponible. Saisissez le véhicule à la main.', 501, 'plate_lookup_unavailable');
       console.error('[api] plaque', e);
-      return jsonError('La recherche par plaque est momentanément indisponible.', 502);
+      return jsonError('La recherche par plaque est momentanément indisponible.', 502, 'plate_lookup_down');
     }
   });
 }

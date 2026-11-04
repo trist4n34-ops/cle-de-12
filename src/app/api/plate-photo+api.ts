@@ -16,18 +16,18 @@ export function POST(request: Request) {
     if (limited) return limited;
     const input = await readJson(request, PlatePhotoInput);
     if (input instanceof Response) return input;
-    if (!process.env.ANTHROPIC_API_KEY) return jsonError('L’IA n’est pas configurée sur ce serveur.', 503);
+    if (!process.env.ANTHROPIC_API_KEY) return jsonError('L’IA n’est pas configurée sur ce serveur.', 503, 'ai_not_configured');
 
     let read;
     try {
       read = await readPlate(input.photo);
     } catch (e) {
-      if (e instanceof ClaudeError) return jsonError('La plaque n’a pas pu être lue. Tapez-la à la main.', 422);
+      if (e instanceof ClaudeError) return jsonError('La plaque n’a pas pu être lue. Tapez-la à la main.', 422, 'plate_unreadable');
       console.error('[api] lecture de plaque', e);
-      return jsonError('La lecture de la plaque est momentanément indisponible.', 502);
+      return jsonError('La lecture de la plaque est momentanément indisponible.', 502, 'plate_read_down');
     }
     const plate = normalizePlate(read.plate);
-    if (!plate) return jsonError('Plaque illisible sur cette image. Cadrez-la de face et bien éclairée, ou tapez-la.', 422);
+    if (!plate) return jsonError('Plaque illisible sur cette image. Cadrez-la de face et bien éclairée, ou tapez-la.', 422, 'plate_unreadable');
 
     let vehicle = null;
     try {
